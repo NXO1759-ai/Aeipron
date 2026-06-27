@@ -1,35 +1,41 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { Menu, X, ShoppingBag } from 'lucide-react';
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { usePathname } from 'next/navigation';
-import { useCart } from '@/store/use-cart';
-import { useHydrated } from '@/hooks/use-hydrated';
+import Link from "next/link";
+import { Menu, X, ShoppingBag } from "lucide-react";
+import { useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { usePathname } from "next/navigation";
+import { useCart } from "@/store/use-cart";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const pathname = usePathname();
-  const isHome = pathname === '/';
+  const isHome = pathname === "/";
 
   const { items, toggleCart } = useCart();
   const hydrated = useHydrated();
-  const itemCount = hydrated ? items.reduce((acc, i) => acc + i.quantity, 0) : 0;
+  const itemCount = hydrated
+    ? items.reduce((acc, i) => acc + i.quantity, 0)
+    : 0;
 
   const navLinks = [
-    { label: 'Collection', href: '/collection' },
-    { label: 'Collaborators', href: '/collaborators' },
-    { label: 'Our Story', href: '/story' },
+    { label: "Collection", href: "/collection" },
+    { label: "Collaborators", href: "/collaborators" },
+    { label: "Our Story", href: "/story" },
   ];
 
   return (
     <>
-      <header className={`fixed top-0 w-full z-40 ${isHome ? 'bg-transparent' : 'bg-apeiron-black/70 backdrop-blur-md border-b border-ui-concrete/10'}`}>
+      <header
+        className={`fixed top-0 w-full z-40 ${isHome ? "bg-transparent" : "bg-apeiron-black/70 backdrop-blur-md border-b border-ui-concrete/10"}`}
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-24 flex items-center justify-between">
-
           {/* Left Hemisphere: Brand Lockup */}
-          <Link href="/" className="flex flex-col items-start cursor-pointer group">
+          <Link
+            href="/"
+            className="flex flex-col items-start cursor-pointer group"
+          >
             <h1 className="text-2xl font-bold uppercase tracking-[0.2em] text-apeiron-ivory leading-none">
               Aeipron
             </h1>
@@ -42,7 +48,7 @@ export function Header() {
           <div className="flex items-center gap-6">
             <button
               onClick={toggleCart}
-              aria-label={`Open bag${itemCount > 0 ? `, ${itemCount} item${itemCount === 1 ? '' : 's'}` : ''}`}
+              aria-label={`Open bag${itemCount > 0 ? `, ${itemCount} item${itemCount === 1 ? "" : "s"}` : ""}`}
               className="relative text-apeiron-ivory transition-transform duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] hover:scale-105 flex items-center justify-center"
             >
               <ShoppingBag className="w-7 h-7 stroke-[1.5]" />
@@ -77,10 +83,14 @@ export function Header() {
               aria-hidden="true"
             />
             <motion.div
-              initial={{ x: '100%' }}
+              initial={{ x: "100%" }}
               animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'tween', duration: 0.5, ease: [0.25, 1, 0.5, 1] }}
+              exit={{ x: "100%" }}
+              transition={{
+                type: "tween",
+                duration: 0.5,
+                ease: [0.25, 1, 0.5, 1],
+              }}
               className="fixed top-0 right-0 z-50 flex h-full w-full max-w-sm flex-col bg-apeiron-black border-l border-ui-concrete/20"
               role="dialog"
               aria-modal="true"
@@ -88,10 +98,18 @@ export function Header() {
             >
               <div className="flex items-center justify-between p-6 h-24 border-b border-ui-concrete/20">
                 <div className="flex flex-col items-start">
-                  <span className="text-xl font-bold uppercase tracking-[0.2em] text-apeiron-ivory leading-none">Aeipron</span>
-                  <span className="text-[10px] text-apeiron-ivory tracking-[0.3em] mt-1 leading-none">アペイロン</span>
+                  <span className="text-xl font-bold uppercase tracking-[0.2em] text-apeiron-ivory leading-none">
+                    Aeipron
+                  </span>
+                  <span className="text-[10px] text-apeiron-ivory tracking-[0.3em] mt-1 leading-none">
+                    アペイロン
+                  </span>
                 </div>
-                <button onClick={() => setIsMenuOpen(false)} aria-label="Close menu" className="text-ui-concrete hover:text-apeiron-ivory transition-colors">
+                <button
+                  onClick={() => setIsMenuOpen(false)}
+                  aria-label="Close menu"
+                  className="text-ui-concrete hover:text-apeiron-ivory transition-colors"
+                >
                   <X className="w-8 h-8 stroke-[1.5]" />
                 </button>
               </div>
