@@ -1,6 +1,6 @@
 
 
-# Aeipron Prototype App V1
+# Aeipron Prototype App v1
 
 ## Run Locally
 
