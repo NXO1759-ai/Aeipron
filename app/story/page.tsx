@@ -111,7 +111,7 @@ export default function StoryPage() {
           className="max-w-4xl mx-auto"
         >
           <h2 className="text-4xl md:text-6xl lg:text-7xl font-bold uppercase tracking-widest mb-12 text-[#fdfcf0] leading-tight">
-            Quiet Confidence.<br />Everyday Mastery
+            Quiet Confidence<br />Everyday Mastery
           </h2>
           <p className="text-base md:text-xl font-light leading-relaxed text-neutral-400 max-w-2xl mx-auto">
             Our garments are not designed to shout; they are engineered to perform. We create foundational pieces for visionaries, creators, and leaders who require their wardrobe to be as uncompromising as their ambitions. This is your canvas for limitless potential.
