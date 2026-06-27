@@ -19,7 +19,7 @@ export function Header() {
 
   const navLinks = [
     { label: 'Collection', href: '/collection' },
-    { label: 'Event Partners', href: '/collaborators' },
+    { label: 'Collaborators', href: '/collaborators' },
     { label: 'Our Story', href: '/story' },
   ];
 
