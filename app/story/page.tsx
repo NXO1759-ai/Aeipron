@@ -60,7 +60,7 @@ export default function StoryPage() {
             variants={fadeUpVariant}
           >
             <h2 className="text-3xl md:text-5xl font-bold uppercase tracking-widest mb-8 text-[#fdfcf0]">
-              Beyond The Expected.
+              Beyond The Expected
             </h2>
             <p className="text-base md:text-lg font-light leading-relaxed text-neutral-400">
               The concept was forged out of a deep frustration with the modern wardrobe. We saw a landscape divided between rigid, uncomfortable tailoring and uninspired leisurewear. Apeiron bridges that gap, offering a seamless integration of high-density textures and architectural silhouettes designed to move with you.
@@ -93,7 +93,7 @@ export default function StoryPage() {
           className="max-w-3xl md:max-w-4xl mx-auto text-center"
         >
           <h2 className="text-3xl md:text-5xl font-bold uppercase tracking-widest mb-8 text-[#fdfcf0]">
-            Obsessive Engineering.
+            Obsessive Engineering
           </h2>
           <p className="text-lg md:text-2xl font-light leading-relaxed text-neutral-400">
             True confidence is built from the thread up. We source exclusively from the world’s most revered mills, utilizing custom heavyweight Japanese loopback terry and hyper-durable textiles. Every French seam, blind-debossed detail, and structural fold is meticulously calibrated for longevity and form.
@@ -111,7 +111,7 @@ export default function StoryPage() {
           className="max-w-4xl mx-auto"
         >
           <h2 className="text-4xl md:text-6xl lg:text-7xl font-bold uppercase tracking-widest mb-12 text-[#fdfcf0] leading-tight">
-            Quiet Confidence.<br />Everyday Mastery.
+            Quiet Confidence.<br />Everyday Mastery
           </h2>
           <p className="text-base md:text-xl font-light leading-relaxed text-neutral-400 max-w-2xl mx-auto">
             Our garments are not designed to shout; they are engineered to perform. We create foundational pieces for visionaries, creators, and leaders who require their wardrobe to be as uncompromising as their ambitions. This is your canvas for limitless potential.
