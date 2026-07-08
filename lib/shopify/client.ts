@@ -9,9 +9,14 @@
 //
 // All Shopify calls go through `shopifyRequest`. Never construct a Shopify
 // fetch inline in a route, server action, or component — call this function.
+//
+// Uses Node's built-in https module (not global fetch) for network requests.
+// This ensures reliable IPv4 connectivity across environments and gives us
+// precise control over connection parameters (timeout, family, headers).
 // ---------------------------------------------------------------------------
 
 import 'server-only';
+import https from 'node:https';
 
 export class ShopifyClientError extends Error {
   constructor(message: string, public readonly status?: number) {
@@ -38,28 +43,52 @@ export async function shopifyRequest<T>(
     throw new ShopifyClientError('Shopify environment variables are not configured');
   }
 
-  const endpoint = `https://${domain}/api/${apiVersion}/graphql.json`;
+  const body = JSON.stringify({ query, variables });
 
-  let response: Response;
+  const options: https.RequestOptions = {
+    hostname: domain,
+    port: 443,
+    path: `/api/${apiVersion}/graphql.json`,
+    method: 'POST',
+    family: 4, // Force IPv4 — avoids ETIMEDOUT on IPv6-first resolvers
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Shopify-Storefront-Access-Token': token,
+      Accept: 'application/json',
+      'Content-Length': Buffer.byteLength(body),
+    },
+  };
+
+  let statusCode: number;
+  let responseBody: string;
+
   try {
-    response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Shopify-Storefront-Access-Token': token,
-        Accept: 'application/json',
+    [statusCode, responseBody] = await new Promise<[number, string]>(
+      (resolve, reject) => {
+        const req = https.request(options, (res) => {
+          let data = '';
+          res.on('data', (chunk) => (data += chunk));
+          res.on('end', () => resolve([res.statusCode ?? 0, data]));
+        });
+        req.on('error', reject);
+        req.write(body);
+        req.end();
       },
-      body: JSON.stringify({ query, variables }),
-    });
+    );
   } catch {
     throw new ShopifyClientError('Shopify request failed: network error');
   }
 
-  if (!response.ok) {
-    throw new ShopifyClientError('Shopify request failed', response.status);
+  if (statusCode < 200 || statusCode >= 300) {
+    throw new ShopifyClientError('Shopify request failed', statusCode);
   }
 
-  const json: { data?: T; errors?: unknown[] } = await response.json();
+  let json: { data?: T; errors?: unknown[] };
+  try {
+    json = JSON.parse(responseBody);
+  } catch {
+    throw new ShopifyClientError('Shopify returned invalid JSON');
+  }
 
   if (json.errors && json.errors.length > 0) {
     // Log the full errors server-side for debugging, but never surface them
