@@ -37,7 +37,7 @@ export function Header() {
             className="flex flex-col items-start cursor-pointer group"
           >
             <h1 className="text-2xl font-bold uppercase tracking-[0.2em] text-apeiron-ivory leading-none">
-              Aeipron
+              Apeiron
             </h1>
             <span className="text-[10px] text-apeiron-ivory tracking-[0.3em] mt-1 leading-none font-medium">
               アペイロン
