@@ -2,10 +2,13 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { getCollectionProducts } from '@/lib/catalog';
 
-export default function CollectionPage() {
+// Shopify reads are network calls — don't prerender at build time.
+export const dynamic = 'force-dynamic';
+
+export default async function CollectionPage() {
   // Single source of truth — these are the same records the detail page resolves,
   // so the name and price you click are the name and price you land on.
-  const products = getCollectionProducts();
+  const products = await getCollectionProducts();
 
   return (
     <div className="min-h-screen bg-apeiron-black text-apeiron-ivory pb-24">
@@ -24,27 +27,31 @@ export default function CollectionPage() {
         </div>
 
         {/* Product Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-12 mb-16">
-          {products.map((product) => (
-            <Link href={`/product/${product.id}`} key={product.id} className="group cursor-pointer">
-              <div className="relative aspect-[3/4] bg-ui-concrete/10 mb-4 overflow-hidden">
-                <Image
-                  src={product.images[0]}
-                  alt={product.name}
-                  fill
-                  className="object-cover transition-transform duration-[800ms] ease-[cubic-bezier(0.25,1,0.5,1)] group-hover:scale-105 filter grayscale contrast-125"
-                />
-                <div className="absolute inset-0 bg-apeiron-black/0 group-hover:bg-apeiron-black/20 transition-colors duration-500 ease-[cubic-bezier(0.25,1,0.5,1)]" />
-              </div>
-              <div className="flex justify-between items-start mt-4">
-                <h3 className="font-bold uppercase tracking-wider text-sm leading-tight max-w-[75%] text-ui-concrete group-hover:text-apeiron-ivory transition-colors duration-300">
-                  {product.name}
-                </h3>
-                <span className="font-mono text-ui-concrete">${product.price}</span>
-              </div>
-            </Link>
-          ))}
-        </div>
+        {products.length === 0 ? (
+          <p className="text-ui-concrete uppercase tracking-widest text-sm py-24 text-center">Collection coming soon.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-12 mb-16">
+            {products.map((product) => (
+              <Link href={`/product/${product.id}`} key={product.id} className="group cursor-pointer">
+                <div className="relative aspect-[3/4] bg-ui-concrete/10 mb-4 overflow-hidden">
+                  <Image
+                    src={product.images[0]}
+                    alt={product.name}
+                    fill
+                    className="object-cover transition-transform duration-[800ms] ease-[cubic-bezier(0.25,1,0.5,1)] group-hover:scale-105 filter grayscale contrast-125"
+                  />
+                  <div className="absolute inset-0 bg-apeiron-black/0 group-hover:bg-apeiron-black/20 transition-colors duration-500 ease-[cubic-bezier(0.25,1,0.5,1)]" />
+                </div>
+                <div className="flex justify-between items-start mt-4">
+                  <h3 className="font-bold uppercase tracking-wider text-sm leading-tight max-w-[75%] text-ui-concrete group-hover:text-apeiron-ivory transition-colors duration-300">
+                    {product.name}
+                  </h3>
+                  <span className="font-mono text-ui-concrete">${product.price}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
 
       </div>
     </div>
