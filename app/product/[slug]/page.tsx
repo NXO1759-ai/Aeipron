@@ -3,12 +3,15 @@ import { notFound } from 'next/navigation';
 import { getProductBySlug } from '@/lib/catalog';
 import { ProductClient } from './ProductClient';
 
+// Shopify reads are network calls — don't prerender at build time.
+export const dynamic = 'force-dynamic';
+
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
 
   // Resolve the actual product. Unknown slugs render the 404 boundary instead
   // of silently falling back to a hardcoded item.
-  const product = getProductBySlug(slug);
+  const product = await getProductBySlug(slug);
   if (!product) notFound();
 
   return (
