@@ -37,7 +37,7 @@ export default async function CollectionPage() {
                       src={collection.image}
                       alt={collection.name}
                       fill
-                      className="object-cover transition-transform duration-[800ms] ease-[cubic-bezier(0.25,1,0.5,1)] group-hover:scale-105 filter grayscale contrast-125"
+                      className="object-cover transition-transform duration-[800ms] ease-[cubic-bezier(0.25,1,0.5,1)] group-hover:scale-105"
                     />
                   ) : (
                     <div className="absolute inset-0 flex items-center justify-center">
