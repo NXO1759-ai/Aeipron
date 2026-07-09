@@ -6,7 +6,6 @@ import { getCollections } from '@/lib/catalog';
 export const dynamic = 'force-dynamic';
 
 export default async function CollectionPage() {
-  // Shopify Collections (categories) — each card links to /collection/[handle].
   const collections = await getCollections();
 
   return (
@@ -17,6 +16,11 @@ export default async function CollectionPage() {
         <div className="flex flex-col md:flex-row justify-between items-end mb-16 border-b border-ui-concrete/20 pb-8 pt-8">
           <div>
             <h1 className="font-inter text-4xl md:text-5xl font-medium uppercase tracking-tighter mb-4">Collection</h1>
+          </div>
+          <div className="mt-8 md:mt-0 flex gap-4 text-sm font-bold uppercase tracking-widest">
+            <button type="button" className="hover:text-apeiron-ivory text-ui-concrete transition-colors">Filter</button>
+            <span className="text-ui-concrete/50">/</span>
+            <button type="button" className="hover:text-apeiron-ivory text-ui-concrete transition-colors">Sort</button>
           </div>
         </div>
 
@@ -35,7 +39,13 @@ export default async function CollectionPage() {
                       fill
                       className="object-cover transition-transform duration-[800ms] ease-[cubic-bezier(0.25,1,0.5,1)] group-hover:scale-105 filter grayscale contrast-125"
                     />
-                  ) : null}
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="font-inter text-2xl md:text-3xl font-medium uppercase tracking-tighter text-ui-concrete/30 select-none">
+                        {collection.name}
+                      </span>
+                    </div>
+                  )}
                   <div className="absolute inset-0 bg-apeiron-black/0 group-hover:bg-apeiron-black/20 transition-colors duration-500 ease-[cubic-bezier(0.25,1,0.5,1)]" />
                 </div>
                 <div className="flex justify-between items-start mt-4">

@@ -18,6 +18,7 @@ export default async function CollectionDetailPage({
     <div className="min-h-screen bg-apeiron-black text-apeiron-ivory pb-24">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
+        {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-end mb-16 border-b border-ui-concrete/20 pb-8 pt-8">
           <div>
             <h1 className="font-inter text-4xl md:text-5xl font-medium uppercase tracking-tighter mb-4">
@@ -29,14 +30,18 @@ export default async function CollectionDetailPage({
               </p>
             )}
           </div>
-          <Link
-            href="/collection"
-            className="mt-8 md:mt-0 text-sm font-bold uppercase tracking-widest text-ui-concrete hover:text-apeiron-ivory transition-colors"
-          >
-            ← All Collections
-          </Link>
+          <div className="mt-8 md:mt-0 flex gap-4 text-sm font-bold uppercase tracking-widest">
+            <Link href="/collection" className="hover:text-apeiron-ivory text-ui-concrete transition-colors">
+              ← All
+            </Link>
+            <span className="text-ui-concrete/50">/</span>
+            <button type="button" className="hover:text-apeiron-ivory text-ui-concrete transition-colors">Filter</button>
+            <span className="text-ui-concrete/50">/</span>
+            <button type="button" className="hover:text-apeiron-ivory text-ui-concrete transition-colors">Sort</button>
+          </div>
         </div>
 
+        {/* Product Grid */}
         {collection.products.length === 0 ? (
           <p className="text-ui-concrete uppercase tracking-widest text-sm py-24 text-center">
             No products in this collection yet.
@@ -60,7 +65,11 @@ export default async function CollectionDetailPage({
                   <h3 className="font-bold uppercase tracking-wider text-sm leading-tight max-w-[75%] text-ui-concrete group-hover:text-apeiron-ivory transition-colors duration-300">
                     {product.name}
                   </h3>
-                  <span className="font-mono text-ui-concrete">${product.price}</span>
+                  <span className="font-mono text-ui-concrete">
+                    {product.priceMax > product.price
+                      ? `$${product.price}–${product.priceMax}`
+                      : `$${product.price}`}
+                  </span>
                 </div>
               </Link>
             ))}

@@ -39,7 +39,11 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         <div className="p-8 md:p-12 lg:p-24 flex flex-col justify-center min-h-[50vh] lg:min-h-[calc(100vh-5rem)]">
           <div className="max-w-md w-full mx-auto lg:mx-0">
             <h1 className="text-3xl md:text-5xl font-bold uppercase tracking-tighter mb-4">{product.name}</h1>
-            <p className="text-xl font-mono text-ui-concrete mb-12">${product.price}</p>
+            <p className="text-xl font-mono text-ui-concrete mb-12">
+              {product.priceMax > product.price
+                ? `$${product.price} – $${product.priceMax}`
+                : `$${product.price}`}
+            </p>
 
             <p className="text-sm text-ui-concrete leading-relaxed mb-12">
               {product.description}
