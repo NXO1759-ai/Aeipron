@@ -71,20 +71,64 @@ const PRODUCT_FRAGMENT = `#graphql
 `;
 
 /**
- * Operation 1 — collection page product list.
+ * Operation 1 — collections index (category cards).
  *
- * Fetches up to 250 products (covers the launch catalog and well beyond).
- * Uses `description(truncateAt: 200)` to avoid pulling full descriptions for
- * card display — the detail query fetches the untruncated description.
+ * Fetches up to 50 collections. Each card needs a representative image; Shopify
+ * Collection images are nullable, so we also pull the first product's
+ * `featuredImage` as a fallback (the adapter picks `image ?? firstFeaturedImage`).
+ * `description` is selected truncated for the card blurb.
  *
- * Named operation `ProductList` for Shopify query tracking / deduplication.
+ * Named operation `CollectionList` for Shopify query tracking / deduplication.
  */
-export const PRODUCT_LIST_QUERY = `#graphql
-  query ProductList {
-    products(first: 250) {
+export const COLLECTION_LIST_QUERY = `#graphql
+  query CollectionList {
+    collections(first: 50) {
       nodes {
-        ...ProductFields
+        handle
+        title
         description(truncateAt: 200)
+        image {
+          url
+        }
+        products(first: 1) {
+          nodes {
+            featuredImage {
+              url
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * Operation 1b — products within a single collection (category detail page).
+ *
+ * Fetches a collection by its handle and expands its products via the shared
+ * `ProductFields` fragment so the cards reuse the same adapter path as the
+ * product detail page. `description(truncateAt: 200)` is selected per-product
+ * for the card blurb (the fragment deliberately omits `description`).
+ *
+ * The `$handle` variable is typed `String!` and passed separately (not
+ * interpolated) to prevent injection and enable Shopify-side deduplication.
+ *
+ * Named operation `CollectionByHandle` for Shopify query tracking.
+ */
+export const COLLECTION_BY_HANDLE_QUERY = `#graphql
+  query CollectionByHandle($handle: String!) {
+    collectionByHandle(handle: $handle) {
+      handle
+      title
+      description
+      image {
+        url
+      }
+      products(first: 50) {
+        nodes {
+          ...ProductFields
+          description(truncateAt: 200)
+        }
       }
     }
   }

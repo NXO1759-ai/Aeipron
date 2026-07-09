@@ -44,7 +44,8 @@ export interface ShopifyProductPriceRange {
 /**
  * A single product node as returned by the Storefront API.
  * `images` is optional — only present on the PRODUCT_BY_HANDLE_QUERY (detail
- * page). The list query (PRODUCT_LIST_QUERY) returns `featuredImage` only.
+ * page). Collection product cards (COLLECTION_BY_HANDLE_QUERY) return
+ * `featuredImage` only, via the shared fragment.
  */
 export interface ShopifyProductNode {
   id: string;
@@ -57,9 +58,23 @@ export interface ShopifyProductNode {
   priceRange: ShopifyProductPriceRange;
 }
 
-/** Response shape for the `products(first:)` query (PRODUCT_LIST_QUERY). */
-export interface ShopifyProductsResponse {
+/** A Shopify Collection (category) node. */
+export interface ShopifyCollectionNode {
+  handle: string;
+  title: string;
+  description: string;
+  image: ShopifyImage | null;
   products: { nodes: ShopifyProductNode[] };
+}
+
+/** Response shape for the `collections(first:)` query (COLLECTION_LIST_QUERY). */
+export interface ShopifyCollectionsResponse {
+  collections: { nodes: ShopifyCollectionNode[] };
+}
+
+/** Response shape for the `collectionByHandle(handle:)` query (COLLECTION_BY_HANDLE_QUERY). */
+export interface ShopifyCollectionByHandleResponse {
+  collectionByHandle: ShopifyCollectionNode | null;
 }
 
 /** Response shape for the `product(handle:)` query (PRODUCT_BY_HANDLE_QUERY). */
