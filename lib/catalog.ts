@@ -1,24 +1,30 @@
 // ---------------------------------------------------------------------------
 // Catalog — the single source of truth for everything sellable.
 //
-// --- Shopify-backed (Phase 1): getCollectionProducts, getProductBySlug ---
+// --- Shopify-backed (Phase 1): getCollections, getCollectionByHandle,
+// ---                          getProductBySlug ---
 // --- Mock-backed (removed in later phases): getOrganizer*, getCatalogPrice,
-//     getShipping, constants, ORGANIZERS, skuIndex ---
+// ---     getShipping, constants, ORGANIZERS, skuIndex ---
 //
-// Product reads now go through the Shopify Storefront API. The mock pricing
-// index (skuIndex) and organizer data remain until Phases 2–4 rewire the
-// cart, checkout, and organizer routes.
+// Product + collection reads go through the Shopify Storefront API. The mock
+// pricing index (skuIndex) and organizer data remain until Phases 2–4 rewire
+// the cart, checkout, and organizer routes.
 //
 // Do not import this file from a 'use client' component. It is server-only data
 // and must not be shipped to the browser bundle.
 // ---------------------------------------------------------------------------
 
-import type { Product, Organizer } from './types';
+import type { Product, Organizer, CollectionSummary, Collection } from './types';
 import { shopifyRequest } from '@/lib/shopify/client';
-import { PRODUCT_LIST_QUERY, PRODUCT_BY_HANDLE_QUERY } from '@/lib/shopify/queries';
-import { mapProduct } from '@/lib/shopify/adapter';
+import {
+  COLLECTION_LIST_QUERY,
+  COLLECTION_BY_HANDLE_QUERY,
+  PRODUCT_BY_HANDLE_QUERY,
+} from '@/lib/shopify/queries';
+import { mapProduct, mapCollectionSummary } from '@/lib/shopify/adapter';
 import type {
-  ShopifyProductsResponse,
+  ShopifyCollectionsResponse,
+  ShopifyCollectionByHandleResponse,
   ShopifyProductByHandleResponse,
 } from '@/lib/shopify/types';
 
@@ -57,12 +63,25 @@ for (const o of ORGANIZERS) {
 }
 
 // ---------------------------------------------------------------------------
-// Read API — Shopify-backed product reads + mock-backed organizer reads
+// Read API — Shopify-backed collection + product reads; mock-backed organizers
 // ---------------------------------------------------------------------------
 
-export async function getCollectionProducts(): Promise<Product[]> {
-  const data = await shopifyRequest<ShopifyProductsResponse>(PRODUCT_LIST_QUERY);
-  return data.products.nodes.map(mapProduct);
+export async function getCollections(): Promise<CollectionSummary[]> {
+  const data = await shopifyRequest<ShopifyCollectionsResponse>(COLLECTION_LIST_QUERY);
+  return data.collections.nodes.map(mapCollectionSummary);
+}
+
+export async function getCollectionByHandle(handle: string): Promise<Collection | null> {
+  const data = await shopifyRequest<ShopifyCollectionByHandleResponse>(
+    COLLECTION_BY_HANDLE_QUERY,
+    { handle },
+  );
+  const node = data.collectionByHandle;
+  if (!node) return null;
+  return {
+    ...mapCollectionSummary(node),
+    products: node.products.nodes.map(mapProduct),
+  };
 }
 
 export async function getProductBySlug(slug: string): Promise<Product | null> {
