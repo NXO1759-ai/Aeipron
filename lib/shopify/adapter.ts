@@ -1,0 +1,137 @@
+// ---------------------------------------------------------------------------
+// Shopify → domain adapter.
+//
+// Maps raw Shopify GraphQL response nodes (lib/shopify/types.ts) to the
+// existing domain types (lib/types.ts). This is the single place where
+// Shopify's field names and shapes are translated — when Shopify renames a
+// field on an API version bump, only this file changes, not every route.
+//
+// Key mapping decisions:
+//   - Product.id      ← node.handle      (NOT node.id — the route uses handle as the URL slug)
+//   - Product.price   ← priceRange.minVariantPrice.amount (parsed string → number)
+//   - Product.priceMax ← priceRange.maxVariantPrice.amount (equals price for single-price products)
+//   - Product.images  ← images?.nodes ?? [featuredImage]   (fallback for collection cards)
+//   - Product.options ← variants grouped by selectedOptions[].name (Size / Color / Title / …)
+//   - Collection.id   ← node.handle      (route uses handle as the URL slug)
+//
+// Do not import this from a client component — it imports lib/shopify/types
+// which carries Shopify's raw shapes and is server-side only.
+// ---------------------------------------------------------------------------
+
+import type {
+  Product,
+  ProductOption,
+  ProductOptionValue,
+  CollectionSummary,
+} from '@/lib/types';
+import type {
+  ShopifyProductNode,
+  ShopifyProductVariant,
+  ShopifyCollectionNode,
+} from '@/lib/shopify/types';
+
+/**
+ * Map a Shopify product node to the domain Product type.
+ */
+export function mapProduct(node: ShopifyProductNode): Product {
+  return {
+    id: node.handle,
+    name: node.title,
+    price: Number(node.priceRange.minVariantPrice.amount),
+    priceMax: Number(node.priceRange.maxVariantPrice.amount),
+    description: node.description,
+    images: mapImages(node),
+    options: mapOptions(node.variants.nodes),
+  };
+}
+
+/**
+ * Map a Shopify collection node to a CollectionSummary (index card). The
+ * collection image is nullable in Shopify, so we fall back to the first
+ * product's featuredImage, then to an empty string if neither exists.
+ */
+export function mapCollectionSummary(node: ShopifyCollectionNode): CollectionSummary {
+  const firstProductImage = node.products.nodes[0]?.featuredImage?.url;
+  return {
+    id: node.handle,
+    name: node.title,
+    description: node.description,
+    image: node.image?.url ?? firstProductImage ?? '',
+  };
+}
+
+/**
+ * Extract the image URL list from a Shopify product node.
+ *
+ * The detail query (PRODUCT_BY_HANDLE_QUERY) returns `images(first: 10)`.
+ * Collection product cards (COLLECTION_BY_HANDLE_QUERY) return only
+ * `featuredImage` via the shared fragment. Fall back to `featuredImage` when
+ * `images` is absent so a card always has at least one image to render.
+ */
+function mapImages(node: ShopifyProductNode): string[] {
+  if (node.images && node.images.nodes.length > 0) {
+    return node.images.nodes.map((img) => img.url);
+  }
+  if (node.featuredImage) {
+    return [node.featuredImage.url];
+  }
+  return [];
+}
+
+/**
+ * Collapse Shopify variant nodes into grouped domain ProductOption[].
+ *
+ * Each Shopify variant carries `selectedOptions` (e.g. [{ name: "Size", value: "M" }]).
+ * We group values by their option `name` so the selector renders one picker per
+ * dimension, labeled by the name ("Select Size", "Select Color", …).
+ *
+ * Aggregation per `(name, value)`:
+ *   - inStock = true if ANY variant offering that value is availableForSale
+ *   - price   = the minimum variant price offering that value
+ *
+ * This is exact for single-dimension products (the only kind in the catalog
+ * today: one variant per value). For multi-dimension products (Size × Color),
+ * value-level availability is an over-approximation — a true matrix picker
+ * would need the specific variant's availability, which is a Phase 2+ concern
+ * (the cart will switch to the variant GID anyway). The aggregation keeps the
+ * selector safe and non-blocking for v1's single-dimension catalog.
+ *
+ * Groups and values are returned in first-seen order — do not sort.
+ */
+function mapOptions(variants: ShopifyProductVariant[]): ProductOption[] {
+  // name → { values: Map<value, {inStock, price}> } preserving insertion order.
+  const groups = new Map<string, Map<string, ProductOptionValue>>();
+
+  for (const variant of variants) {
+    for (const opt of variant.selectedOptions) {
+      let valueMap = groups.get(opt.name);
+      if (!valueMap) {
+        valueMap = new Map();
+        groups.set(opt.name, valueMap);
+      }
+      const variantPrice = Number(variant.price.amount);
+      const existing = valueMap.get(opt.value);
+      if (!existing) {
+        valueMap.set(opt.value, {
+          value: opt.value,
+          inStock: variant.availableForSale,
+          price: variantPrice,
+          variantId: variant.id,
+        });
+      } else {
+        // Aggregate across variants sharing this (name, value).
+        existing.inStock = existing.inStock || variant.availableForSale;
+        if (variantPrice < existing.price) {
+          existing.price = variantPrice;
+          existing.variantId = variant.id;
+        }
+      }
+    }
+  }
+
+  // Preserve first-seen order of both groups and the values within them.
+  return Array.from(groups.entries()).map(([name, valueMap]) => ({
+    name,
+    values: Array.from(valueMap.values()),
+  }));
+}

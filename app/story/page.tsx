@@ -25,7 +25,7 @@ export default function StoryPage() {
             alt="Cinematic macro shot of a guitar headstock"
             fill
             priority
-            className="object-cover filter contrast-125 brightness-[0.6] grayscale"
+            className="object-cover contrast-125 brightness-[0.6]"
           />
         </div>
 
@@ -77,7 +77,7 @@ export default function StoryPage() {
               src="https://picsum.photos/seed/storyorigin/1200/1600" 
               alt="16mm cinematic macro-shot of a garment" 
               fill 
-              className="object-cover filter contrast-125 brightness-75 grayscale"
+              className="object-cover contrast-125 brightness-75"
             />
           </motion.div>
         </div>
