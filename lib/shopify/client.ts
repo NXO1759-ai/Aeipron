@@ -79,7 +79,12 @@ export async function shopifyRequest<T>(
     responseBody = await httpsRequest(endpoint, token, body);
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
-    if (!code || !RETRYABLE_NETWORK_ERRORS.has(code)) {
+    const message = (err as Error).message ?? '';
+    // A timeout surfaced as a plain Error (no `.code`) still looks like a
+    // timeout by message — treat it as retryable so the curl fallback runs
+    // instead of failing the request outright.
+    const looksLikeTimeout = !code && /timeout|timed out/i.test(message);
+    if (!code || (!RETRYABLE_NETWORK_ERRORS.has(code) && !looksLikeTimeout)) {
       // Non-network error — don't retry, surface immediately.
       throw new ShopifyClientError('Shopify request failed: network error');
     }
@@ -146,8 +151,14 @@ function httpsRequest(endpoint: string, token: string, body: string): Promise<st
     });
 
     // Hard timeout — destroy the request if no response within the limit.
+    // The error carries `code: 'ETIMEDOUT'` so the curl-fallback routing in
+    // `shopifyRequest` recognises it as retryable (a plain `new Error()` has
+    // no `.code` and would wrongly be treated as a non-retryable failure,
+    // bypassing the curl fallback entirely).
     req.setTimeout(HTTPS_TIMEOUT_MS, () => {
-      req.destroy(new Error('ETIMEDOUT'));
+      const err = new Error('Shopify request timed out') as NodeJS.ErrnoException;
+      err.code = 'ETIMEDOUT';
+      req.destroy(err);
     });
 
     req.on('error', reject);

@@ -65,10 +65,55 @@ export interface Collection extends CollectionSummary {
   products: Product[];
 }
 
-// What the client is allowed to send to the server when checking out.
-// Note the deliberate absence of `price` — the server prices the cart.
+// ---------------------------------------------------------------------------
+// Cart domain types (Phase 2).
+//
+// These mirror the Shopify Cart API response, adapted by lib/shopify/adapter.ts
+// (mapCart / mapCartLine). The browser never sends a price — cart mutations
+// send only `merchandiseId` + `quantity` (and `lineId`/`cartId`). The `price` on
+// CartLine is display-only, sourced from Shopify's `cost.amountPerQuantity`.
+// ---------------------------------------------------------------------------
+
+/**
+ * A single line in a Shopify cart, as held in the Zustand optimistic cache and
+ * rendered in the cart drawer / checkout summary.
+ *
+ * Identity: `lineId` is the Shopify CART-LINE GID (distinct from the variant
+ * GID). It is the stable, unique key `cartLinesUpdate` / `cartLinesRemove`
+ * require, and the React key for line rendering. `merchandiseId` is the
+ * ProductVariant GID, used only to CREATE a line.
+ *
+ * `price` is display-only and parsed from Shopify's `cost.amountPerQuantity`
+ * (a Decimal string → number). The server/Shopify is the price source of truth
+ * — the client never sends a price.
+ */
 export interface CartLine {
-  id: string;
-  size: string;
+  lineId: string; // Shopify cart-line GID — unique key for updates/removal/React
+  merchandiseId: string; // Shopify ProductVariant GID — used to create a line
+  name: string; // display name (product title, optionally with size)
+  price: number; // display-only, from Shopify cost.amountPerQuantity
+  size: string; // Size selectedOption value, or 'OS' for one-size products
   quantity: number;
+  image: string; // variant image URL, '' if none
+  currencyCode: string; // e.g. 'USD' — from cost.amountPerQuantity.currencyCode
+}
+
+/**
+ * A Shopify cart snapshot — the authoritative cart state returned by the cart
+ * server actions and cached in the Zustand store.
+ *
+ * `totalQuantity` is the sum of all line quantities (NOT lines.length) and
+ * drives the bag badge. `totalAmount` is an ESTIMATE — shipping and final taxes
+ * are computed at Shopify's hosted checkout after the buyer enters an address;
+ * `totalAmountEstimated: true` confirms this. Always label the figure
+ * "Estimated total" in the UI, never "Total including shipping".
+ */
+export interface Cart {
+  totalQuantity: number;
+  checkoutUrl: string; // Shopify hosted-checkout URL — redirect target
+  subtotalAmount: number; // merchandise subtotal (parsed Decimal)
+  totalAmount: number; // estimated total (subtotal + discounts + tax est.)
+  totalAmountEstimated: boolean;
+  currencyCode: string;
+  lines: CartLine[];
 }

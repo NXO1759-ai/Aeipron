@@ -12,8 +12,13 @@ export function QuickAddProductCard({ product }: { product: MerchItem }) {
   const { addItem } = useCart();
 
   const handleSizeSelect = (size: string) => {
+    // Phase 4: organizer merch (MerchItem) has no Shopify ProductVariant GID
+    // yet — it is mock data until organizers move to Shopify Metaobjects. The
+    // store's addItem rejects gracefully when `merchandiseId` is absent (shows
+    // an "not available for online checkout yet" error in the bag), so this is
+    // non-crashing today. Wiring QuickAdd to a real Shopify variant GID is the
+    // Phase 4 organizer-integration task.
     addItem({
-      id: product.id,
       name: product.name,
       price: product.price,
       size,
