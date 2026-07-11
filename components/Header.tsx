@@ -13,11 +13,12 @@ export function Header() {
   const pathname = usePathname();
   const isHome = pathname === "/";
 
-  const { items, toggleCart } = useCart();
+  const { totalQuantity, toggleCart } = useCart();
   const hydrated = useHydrated();
-  const itemCount = hydrated
-    ? items.reduce((acc, i) => acc + i.quantity, 0)
-    : 0;
+  // The badge reads the store's `totalQuantity` (sourced from Shopify's
+  // cart.totalQuantity) — the single source of truth. Gated behind
+  // `useHydrated` so the first client paint matches the server HTML (empty).
+  const itemCount = hydrated ? totalQuantity : 0;
 
   const navLinks = [
     { label: "Collection", href: "/collection" },

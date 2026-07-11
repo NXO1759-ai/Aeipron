@@ -1,4 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// queries.ts imports 'server-only' (build-time guard against client imports);
+// under Vitest its default export throws, so mock it to an empty module.
+vi.mock('server-only', () => ({}));
+
 import {
   COLLECTION_LIST_QUERY,
   COLLECTION_BY_HANDLE_QUERY,

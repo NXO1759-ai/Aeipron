@@ -81,3 +81,106 @@ export interface ShopifyCollectionByHandleResponse {
 export interface ShopifyProductByHandleResponse {
   product: ShopifyProductNode | null;
 }
+
+// ---------------------------------------------------------------------------
+// Raw Shopify Cart API response shapes (Phase 2 — operations 5–9).
+//
+// These mirror the exact field selections in the CART_FIELDS fragment
+// (lib/shopify/queries.ts). The adapter (mapCart / mapCartLine) bridges them
+// to the domain Cart / CartLine types in lib/types.ts.
+//
+// Key shape notes (verified against the live Storefront API + SHOPIFY_API.md §6):
+//   - Cart line lists use `edges` / `node` (NOT `nodes` — the Cart.lines
+//     connection is edge-based, unlike Product.variants which is node-based).
+//   - `merchandise` is a `Merchandise` UNION — `id`, `price`, `image`, etc. live
+//     on `ProductVariant`, not on the union. The query uses an inline fragment
+//     `... on ProductVariant { ... }`; since only ProductVariant is selected,
+//     this type models the resolved variant directly.
+//   - `amount` is always a string (Shopify Decimal scalar), parsed to number
+//     at the adapter boundary.
+//   - `totalAmountEstimated: true` means shipping + final taxes are NOT in
+//     `totalAmount` — they are computed at Shopify's hosted checkout.
+// ---------------------------------------------------------------------------
+
+/** Money on a cart response (Decimal amount as string + currency code). */
+export interface ShopifyCartMoney {
+  amount: string;
+  currencyCode: string;
+}
+
+/** Per-line cost: `amountPerQuantity` (unit price) and `totalAmount` (line total). */
+export interface ShopifyCartLineCost {
+  amountPerQuantity: ShopifyCartMoney;
+  totalAmount: ShopifyCartMoney;
+}
+
+/**
+ * The merchandise of a cart line, resolved to its ProductVariant via the
+ * `... on ProductVariant { ... }` inline fragment. `Merchandise` is a union in
+ * Shopify; we only ever select the ProductVariant member, so this type is the
+ * variant shape directly. `product.title` / `product.handle` are nested for
+ * display + URL routing.
+ */
+export interface ShopifyCartMerchandiseVariant {
+  id: string; // Shopify ProductVariant GID — the `merchandiseId` for line creation
+  title: string;
+  price: ShopifyCartMoney;
+  image: ShopifyImage | null;
+  selectedOptions: ShopifySelectedOption[];
+  product: { title: string; handle: string };
+}
+
+/** A single cart line node (from cart.lines.edges[].node). */
+export interface ShopifyCartLine {
+  id: string; // Shopify CART-LINE GID — distinct from the variant GID; used by update/remove
+  quantity: number;
+  cost: ShopifyCartLineCost;
+  merchandise: ShopifyCartMerchandiseVariant;
+}
+
+/** Cart-level cost (subtotal, estimated total, estimate flags). */
+export interface ShopifyCartCost {
+  subtotalAmount: ShopifyCartMoney;
+  totalAmount: ShopifyCartMoney;
+  totalAmountEstimated: boolean;
+}
+
+/** A Shopify Cart node (the shared shape returned by every cart op). */
+export interface ShopifyCartNode {
+  id: string; // opaque, may include `?key=<secret>` — treat as opaque, never parse
+  totalQuantity: number;
+  checkoutUrl: string;
+  cost: ShopifyCartCost;
+  lines: { edges: { node: ShopifyCartLine }[] };
+}
+
+/** Shopify userErrors shape returned by cart mutations. */
+export interface ShopifyCartUserError {
+  field: string[] | null; // nullable per Storefront schema (null when not tied to an input field)
+  message: string;
+}
+
+/** Response shape for the `cart(id:)` query (CART_GET_QUERY). */
+export interface ShopifyCartResponse {
+  cart: ShopifyCartNode | null;
+}
+
+/** Response shape for `cartCreate` (CART_CREATE_MUTATION). */
+export interface ShopifyCartCreateResponse {
+  cartCreate: { cart: ShopifyCartNode | null; userErrors: ShopifyCartUserError[] };
+}
+
+/** Response shape for `cartLinesAdd` (CART_LINES_ADD_MUTATION). */
+export interface ShopifyCartLinesAddResponse {
+  cartLinesAdd: { cart: ShopifyCartNode | null; userErrors: ShopifyCartUserError[] };
+}
+
+/** Response shape for `cartLinesUpdate` (CART_LINES_UPDATE_MUTATION). */
+export interface ShopifyCartLinesUpdateResponse {
+  cartLinesUpdate: { cart: ShopifyCartNode | null; userErrors: ShopifyCartUserError[] };
+}
+
+/** Response shape for `cartLinesRemove` (CART_LINES_REMOVE_MUTATION). */
+export interface ShopifyCartLinesRemoveResponse {
+  cartLinesRemove: { cart: ShopifyCartNode | null; userErrors: ShopifyCartUserError[] };
+}

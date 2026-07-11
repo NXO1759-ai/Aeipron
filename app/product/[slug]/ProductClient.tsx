@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useCart } from '@/store/use-cart';
+import { resolveSelectedVariant } from '@/lib/product';
 import type { Product, ProductOption } from '@/lib/types';
 
 export function ProductClient({ product }: { product: Product }) {
@@ -9,36 +10,49 @@ export function ProductClient({ product }: { product: Product }) {
   const [selections, setSelections] = useState<Record<string, string>>({});
   const { addItem } = useCart();
 
-  // The selected variant is the first variant matching ALL selected option values.
-  const selectedVariantId = (() => {
-    const optionNames = product.options.map((o) => o.name);
-    if (optionNames.length === 0 || !optionNames.every((n) => selections[n])) return null;
+  // The selected variant: resolves once ALL groups have an in-stock selection.
+  // `variantId` is the Shopify ProductVariant GID (the cart merchandiseId);
+  // `price` is the variant's own price, shown live as the selection changes.
+  const selectedVariant = resolveSelectedVariant(product, selections);
+  const selectedVariantId = selectedVariant?.variantId ?? null;
+  const selectedVariantPrice = selectedVariant?.price ?? null;
 
-    for (const group of product.options) {
-      const selected = group.values.find((v) => v.value === selections[group.name]);
-      if (!selected || !selected.inStock) return null;
-    }
-
-    // Find the first in-stock value from the first group — for single-dimension
-    // products this is the variant GID. For multi-dimension we'd need a matrix
-    // lookup, but v1's catalog is single-dimension (Size OR Color, not both).
-    return product.options[0]?.values.find((v) => v.value === selections[product.options[0].name])?.variantId ?? null;
-  })();
-
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     if (!selectedVariantId) return;
-    // For Phase 1, still pass the mock-cart shape (Phase 2 will switch to variantId).
-    addItem({
-      id: product.id,
+    // Phase 2: pass the resolved Shopify ProductVariant GID as `merchandiseId`.
+    // The server action creates/adds the Shopify cart line from it; the browser
+    // never sends a price (Shopify prices the line from the variant). The
+    // `price` passed here is display-only (provisional line in the optimistic
+    // cache) and uses the SELECTED variant's price, not the product minimum.
+    await addItem({
+      merchandiseId: selectedVariantId,
       name: product.name,
-      price: product.price,
+      price: selectedVariantPrice ?? product.price,
       size: Object.values(selections).join(' / '),
-      image: product.images[0],
+      image: product.images[0] ?? '',
+      currencyCode: 'USD',
     });
   };
 
+  // Price shown live: the selected variant's price once a valid in-stock
+  // selection is made, otherwise the product's min–max range (or single price).
+  const priceLabel = selectedVariantPrice != null
+    ? `$${selectedVariantPrice}`
+    : product.priceMax > product.price
+      ? `$${product.price} – $${product.priceMax}`
+      : `$${product.price}`;
+
   return (
     <div>
+      {/* Price updates with the selected variant (live). */}
+      <p className="text-xl font-mono text-ui-concrete mb-12" aria-live="polite">
+        {priceLabel}
+      </p>
+
+      <p className="text-sm text-ui-concrete leading-relaxed mb-12">
+        {product.description}
+      </p>
+
       {product.options.map((group: ProductOption) => (
         <div key={group.name} className="mb-10">
           <div className="mb-6 flex justify-between items-end">

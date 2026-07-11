@@ -15,19 +15,27 @@
 //   - Collection.id   ← node.handle      (route uses handle as the URL slug)
 //
 // Do not import this from a client component — it imports lib/shopify/types
-// which carries Shopify's raw shapes and is server-side only.
+// which carries Shopify's raw shapes and is server-side only. The
+// `import 'server-only'` below makes any client import fail at build time.
 // ---------------------------------------------------------------------------
+
+import 'server-only';
 
 import type {
   Product,
   ProductOption,
   ProductOptionValue,
   CollectionSummary,
+  Cart,
+  CartLine,
 } from '@/lib/types';
 import type {
   ShopifyProductNode,
   ShopifyProductVariant,
   ShopifyCollectionNode,
+  ShopifyCartNode,
+  ShopifyCartLine,
+  ShopifyCartMerchandiseVariant,
 } from '@/lib/shopify/types';
 
 /**
@@ -134,4 +142,85 @@ function mapOptions(variants: ShopifyProductVariant[]): ProductOption[] {
     name,
     values: Array.from(valueMap.values()),
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Cart adapter (Phase 2).
+//
+// Maps raw Shopify cart nodes (lib/shopify/types.ts) to the domain Cart /
+// CartLine types (lib/types.ts). Same conventions as the product adapter:
+//   - identity comes from Shopify's GIDs, not handles
+//   - money is parsed from Decimal strings (Number(amount))
+//   - nullable fields fall back via ?? ('' for images)
+//
+// Key mapping decisions:
+//   - CartLine.lineId        ← cart line node.id (the CART-LINE GID — used by
+//                               cartLinesUpdate / cartLinesRemove, and as the
+//                               React key. Distinct from the variant GID.)
+//   - CartLine.merchandiseId  ← merchandise.id (the ProductVariant GID — used
+//                               only to CREATE a line)
+//   - CartLine.price         ← cost.amountPerQuantity.amount (display-only)
+//   - CartLine.size          ← the 'Size' selectedOption value, or 'OS' when
+//                               the variant has no Size option (one-size items)
+//   - CartLine.image         ← merchandise.image?.url ?? ''
+//   - Cart.totalQuantity     ← node.totalQuantity (sum of line quantities —
+//                               feeds the bag badge, NOT lines.length)
+//   - Cart.totalAmount       ← cost.totalAmount.amount (ESTIMATE — shipping
+//                               and final taxes are added at hosted checkout)
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract the display size from a cart line's merchandise variant.
+ *
+ * Mirrors the product adapter's convention: use the `Size` selectedOption value
+ * when present; otherwise fall back to `'OS'` for one-size-fits-all products.
+ * Lookup is case-sensitive on the option `name` — if Shopify ever returns a
+ * differently-cased option name (e.g. "size"), this is the one place to fix.
+ */
+function lineSize(merchandise: ShopifyCartMerchandiseVariant): string {
+  const size = merchandise.selectedOptions.find((o) => o.name === 'Size');
+  return size ? size.value : 'OS';
+}
+
+/**
+ * Map a Shopify cart line node to the domain CartLine.
+ *
+ * `lineId` is the cart-line GID (unique, stable, used by update/remove + as the
+ * React key); `merchandiseId` is the ProductVariant GID (used only to create a
+ * line). `price` is parsed from `cost.amountPerQuantity` and is display-only —
+ * the server/Shopify is the price source of truth, the client never sends one.
+ */
+export function mapCartLine(node: ShopifyCartLine): CartLine {
+  const variant = node.merchandise;
+  return {
+    lineId: node.id,
+    merchandiseId: variant.id,
+    name: variant.product.title,
+    price: Number(node.cost.amountPerQuantity.amount),
+    size: lineSize(variant),
+    quantity: node.quantity,
+    image: variant.image?.url ?? '',
+    currencyCode: node.cost.amountPerQuantity.currencyCode,
+  };
+}
+
+/**
+ * Map a Shopify cart node to the domain Cart.
+ *
+ * `totalQuantity` is the sum of all line quantities and drives the bag badge
+ * (NOT `lines.length`, which counts unique lines). `totalAmount` is an
+ * ESTIMATE — shipping + final taxes are computed at Shopify's hosted checkout
+ * after the buyer enters an address; `totalAmountEstimated` reflects this and
+ * the UI must label the figure "Estimated total".
+ */
+export function mapCart(node: ShopifyCartNode): Cart {
+  return {
+    totalQuantity: node.totalQuantity,
+    checkoutUrl: node.checkoutUrl,
+    subtotalAmount: Number(node.cost.subtotalAmount.amount),
+    totalAmount: Number(node.cost.totalAmount.amount),
+    totalAmountEstimated: node.cost.totalAmountEstimated,
+    currencyCode: node.cost.totalAmount.currencyCode,
+    lines: node.lines.edges.map((edge) => mapCartLine(edge.node)),
+  };
 }

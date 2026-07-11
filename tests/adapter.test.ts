@@ -1,4 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// adapter.ts imports 'server-only' (build-time guard against client imports);
+// under Vitest its default export throws, so mock it to an empty module.
+vi.mock('server-only', () => ({}));
+
 import { mapProduct, mapCollectionSummary } from '@/lib/shopify/adapter';
 import {
   shirtsProductNode,
