@@ -8,5 +8,6 @@ coverage/
 AGENTS.md
 /docs
 /graphify-out
+
 # TypeScript incremental build cache
 *.tsbuildinfo
