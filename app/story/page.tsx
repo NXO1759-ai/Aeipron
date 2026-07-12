@@ -38,7 +38,7 @@ export default function StoryPage() {
         >
           <div className="flex flex-col items-center justify-center mb-12">
             <h1 className="text-5xl md:text-7xl lg:text-9xl font-bold uppercase tracking-[0.2em] text-[#fdfcf0] mb-4">
-              AEIPRON
+              APEIRON
             </h1>
             <div className="text-2xl md:text-4xl lg:text-5xl font-bold tracking-[0.4em] text-[#FF2A5F] ml-2">
               アペイロン
