@@ -10,7 +10,7 @@ import {
   type CheckoutContact,
   COUNTRIES,
 } from '@/lib/checkout-schema';
-import { addressRulesFor, subdivisionsFor } from '@/lib/countries';
+import { addressRulesFor } from '@/lib/countries';
 import {
   updateCheckoutContact,
   selectDeliveryOption,
@@ -27,7 +27,7 @@ import { DeliveryOptions } from '@/components/checkout/DeliveryOptions';
 //
 // Two-phase wizard on the single /checkout route (dark theme):
 //   Phase 1 — Information: a react-hook-form + zod form (name, email, phone,
-//             address, city, country, province, zip). On submit → the
+//             address, city, country, zip). On submit → the
 //             `updateCheckoutContact` server action sets the buyer identity +
 //             selected delivery address (triggers rate calc) and returns
 //             CheckoutDetails (cart + deliveryGroups with shipping options).
@@ -42,7 +42,7 @@ import { DeliveryOptions } from '@/components/checkout/DeliveryOptions';
 // modules (lib/types, lib/countries, lib/checkout-schema, lib/utils). It never
 // imports lib/shopify/* or lib/cart-cookie (server-only). The server actions
 // re-validate every payload — the client never sends a price; it sends only
-// contact fields, countryCode/provinceCode, and the two opaque delivery
+// contact fields, countryCode, address fields, and the two opaque delivery
 // handles. The Zustand store is intentionally not hydrated on /checkout, so
 // this island reads everything via the server actions (not the store).
 //
@@ -85,7 +85,6 @@ export function CheckoutExperience({ cart }: CheckoutExperienceProps) {
       address1: '',
       address2: '',
       city: '',
-      province: '',
       zip: '',
       country: '',
     },
@@ -93,14 +92,9 @@ export function CheckoutExperience({ cart }: CheckoutExperienceProps) {
 
   // useWatch (not watch()) — the react-hooks lint plugin flags watch() as not
   // safely memoizable. useWatch subscribes to the field and re-renders on change
-  // so the province/zip labels follow the selected country.
+  // so the zip label follows the selected country.
   const country = useWatch({ control, name: 'country' }) || '';
   const rules = addressRulesFor(country);
-  // When the country has a known subdivision list (US/CA/AU/BR), render a
-  // <select> so the buyer picks a real subdivision by full name and we send the
-  // code as provinceCode — instead of a free-text field whose rigid 2-letter
-  // pattern rejected the full names buyers naturally type ("Pennsylvania").
-  const subdivisions = subdivisionsFor(country);
 
   // --- Rehydrate: if the buyer returns to /checkout with an address + shipping
   //     option already on the cart, jump straight to the shipping phase. The
@@ -291,25 +285,7 @@ export function CheckoutExperience({ cart }: CheckoutExperienceProps) {
                 {(aria) => <Input type="text" autoComplete="address-level2" {...aria} {...register('city')} />}
               </Field>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-                <div className="sm:col-span-1">
-                  <Field label={rules.provinceLabel} name="province" error={errors.province?.message} required={rules.requiresProvince} hint={rules.requiresProvince ? undefined : 'Optional'}>
-                    {(aria) =>
-                      subdivisions ? (
-                        <Select {...aria} {...register('province')}>
-                          <option value="">Select…</option>
-                          {subdivisions.map((s) => (
-                            <option key={s.code} value={s.code}>
-                              {s.name}
-                            </option>
-                          ))}
-                        </Select>
-                      ) : (
-                        <Input type="text" autoComplete="address-level1" {...aria} {...register('province')} />
-                      )
-                    }
-                  </Field>
-                </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div className="sm:col-span-1">
                   <Field label={rules.zipLabel} name="zip" error={errors.zip?.message} required={rules.zipRequired} hint={rules.zipRequired ? undefined : 'Optional'}>
                     {(aria) => <Input type="text" autoComplete="postal-code" {...aria} {...register('zip')} />}

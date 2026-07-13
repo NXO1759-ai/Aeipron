@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { addressRulesFor, isValidCountryCode, subdivisionsFor, COUNTRIES } from '@/lib/countries';
+import { addressRulesFor, isValidCountryCode, COUNTRIES } from '@/lib/countries';
 
 // ---------------------------------------------------------------------------
 // Checkout contact + address form schema (zod 4).
@@ -10,12 +10,14 @@ import { addressRulesFor, isValidCountryCode, subdivisionsFor, COUNTRIES } from 
 // feedback; the server re-validates defensively in the server action (never
 // trust the client).
 //
-// Country-driven rules: province/zip requirements + patterns come from
-// lib/countries.ts (US state+ZIP, CA province+postal, etc.). A superRefine reads
-// the selected country and applies the right rules so one schema serves all
-// markets. The phone field is required (Shopify shipping uses it) but validated
-// leniently — digits, +, spaces, dashes, parentheses — so we never block a
-// legitimate international number on format pedantry.
+// Country-driven rules: postal-code requirements + patterns come from
+// lib/countries.ts (US ZIP, CA postal, UK postcode, etc.). A superRefine reads
+// the selected country and applies the right postal-code rule so one schema
+// serves all markets. No state/province field — Shopify derives the
+// subdivision from the postal code. The phone field is required (Shopify
+// shipping uses it) but validated leniently — digits, +, spaces, dashes,
+// parentheses — so we never block a legitimate international number on format
+// pedantry.
 // ---------------------------------------------------------------------------
 
 /** Lenient phone pattern: optional +, then 7-20 of digits/spaces/dashes/parens/dots. */
@@ -36,7 +38,6 @@ export const checkoutContactSchema = z
     address1: z.string().trim().min(1, 'Address is required').max(120),
     address2: z.string().trim().max(120).optional().or(z.literal('')),
     city: z.string().trim().min(1, 'City is required').max(80),
-    province: z.string().trim().max(80).optional().or(z.literal('')),
     zip: z.string().trim().max(20).optional().or(z.literal('')),
     country: z.string().trim().min(1, 'Country is required'),
   })
@@ -54,30 +55,8 @@ export const checkoutContactSchema = z
 
     const rules = addressRulesFor(data.country);
 
-    // Province / subdivision. When a known subdivision list exists for this
-    // country (US/CA/AU/BR), the form renders a <select> of those codes, so a
-    // tampered/typed value should be rejected against the known list (never
-    // trust the client). Countries with no list (JP/CN/IN/MX, or any
-    // requiresProvince country we have not enumerated) accept free text —
-    // Shopify validates the provinceCode server-side.
-    if (rules.requiresProvince && !data.province) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['province'],
-        message: `${rules.provinceLabel} is required`,
-      });
-    } else if (data.province) {
-      const subs = subdivisionsFor(data.country);
-      if (subs && !subs.some((s) => s.code === data.province)) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['province'],
-          message: `Select a valid ${rules.provinceLabel.toLowerCase()}`,
-        });
-      }
-    }
-
-    // Postal code.
+    // Postal code. The form collects no state/province — Shopify derives the
+    // subdivision from the postal code (or accepts the address without one).
     if (rules.zipRequired && !data.zip) {
       ctx.addIssue({
         code: 'custom',
@@ -101,9 +80,10 @@ export type CheckoutContact = z.infer<typeof checkoutContactSchema>;
 
 /**
  * Build the buyer-identity + delivery-address input for the Shopify mutation
- * from a validated {@link CheckoutContact}. Province is passed as
- * `provinceCode` only when present; country is always the ISO code. No price
- * is ever included — the browser never sends one (trust invariant).
+ * from a validated {@link CheckoutContact}. No `provinceCode` is sent — the
+ * form collects no state/province and Shopify derives the subdivision from the
+ * postal code. Country is always the ISO code. No price is ever included — the
+ * browser never sends one (trust invariant).
  */
 export function toShopifyAddress(input: CheckoutContact) {
   return {
@@ -120,7 +100,6 @@ export function toShopifyAddress(input: CheckoutContact) {
       address1: input.address1,
       address2: input.address2 || undefined,
       city: input.city,
-      provinceCode: input.province || undefined,
       zip: input.zip || undefined,
       countryCode: input.country,
       phone: input.phone,

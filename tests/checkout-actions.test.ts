@@ -51,7 +51,6 @@ const VALID_INPUT = {
   address1: '123 Main St',
   address2: '',
   city: 'Springfield',
-  province: 'IL',
   zip: '62704',
   country: 'US',
 };
@@ -133,8 +132,8 @@ describe('updateCheckoutContact', () => {
     expect(da.address1).toBe('123 Main St');
     expect(da.city).toBe('Springfield');
     expect(da.countryCode).toBe('US');
-    expect(da.provinceCode).toBe('IL');
     expect(da.zip).toBe('62704');
+    expect(da).not.toHaveProperty('provinceCode');
     expect(da).not.toHaveProperty('price');
     expect(da).not.toHaveProperty('amount');
   });

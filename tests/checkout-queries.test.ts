@@ -138,7 +138,7 @@ describe('checkout operations — no deprecated fields', () => {
 });
 
 describe('checkout operations — delivery address uses codes, not names', () => {
-  it('the delivery fragment reads countryCode-style fields (provinceCode is set by the action, not the query)', () => {
+  it('the delivery fragment reads the fields the adapter needs (no provinceCode is sent — Shopify derives it from the postal code)', () => {
     // The query only READS the cart; it does not declare the input shape. The
     // adapter maps deliveryOptions. Assert the fragment reads what the adapter
     // needs: handle (for selection) + estimatedCost + deliveryMethodType.

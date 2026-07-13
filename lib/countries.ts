@@ -1,15 +1,17 @@
 // ---------------------------------------------------------------------------
-// Country list + per-country address validation rules for the checkout form.
+// Country list + per-country postal-code validation rules for the checkout
+// form.
 //
 // The Shopify Storefront `cartDeliveryAddressesAdd` mutation takes a
-// `countryCode` (a CountryCode enum = ISO 3166-1 alpha-2, e.g. "US") and an
-// optional `provinceCode`. We surface a global country <select> to the buyer
-// and apply country-specific province/zip requirements BEFORE the mutation
-// (so the buyer gets fast, field-level feedback instead of a generic Shopify
-// userError). The rules here must stay aligned with the shop's shipping zones
-// in Shopify Admin — a country with no shipping zone returns no delivery
-// options (handled gracefully in the UI), but a missing required province
-// would never reach that point, so we validate it client-side.
+// `countryCode` (a CountryCode enum = ISO 3166-1 alpha-2, e.g. "US") and a
+// `zip`. The checkout form collects Address, City, and Country (no
+// state/province) — Shopify derives the subdivision from the postal code. We
+// surface a global country <select> and apply a country-specific postal-code
+// requirement/pattern BEFORE the mutation (so the buyer gets fast,
+// field-level feedback instead of a generic Shopify userError). The rules
+// here must stay aligned with the shop's shipping zones in Shopify Admin — a
+// country with no shipping zone returns no delivery options (handled
+// gracefully in the UI).
 //
 // This module is pure data + helpers — safe to import from 'use client' (it
 // pulls no server-only code). It is the single source of truth for the
@@ -24,15 +26,16 @@ export interface Country {
 }
 
 /**
- * Per-country address validation rules. `provinceLabel` / `zipLabel` drive the
- * field labels shown in the form (e.g. "State" vs "Province", "ZIP" vs "Postcode").
- * Countries not in `ADDRESS_RULES` fall back to `DEFAULT_ADDRESS_RULES`.
+ * Per-country address validation rules. `zipLabel` drives the field label shown
+ * in the form (e.g. "ZIP code" vs "Postcode"). Countries not in `ADDRESS_RULES`
+ * fall back to `DEFAULT_ADDRESS_RULES`.
+ *
+ * Only postal-code rules live here — the checkout form collects Address, City,
+ * and Country (no state/province), and Shopify derives the subdivision from the
+ * postal code (or accepts the address without one). This keeps the form
+ * country-agnostic and avoids maintaining a per-country subdivision list.
  */
 export interface AddressRules {
-  /** Whether a province/subdivision is required to ship. */
-  requiresProvince: boolean;
-  /** Field label for the subdivision (e.g. "State", "Province", "Region"). */
-  provinceLabel: string;
   /** Field label for the postal code. */
   zipLabel: string;
   /** Whether a postal code is required to ship. */
@@ -43,8 +46,6 @@ export interface AddressRules {
 
 /** Fallback rules for countries without an explicit entry. */
 export const DEFAULT_ADDRESS_RULES: AddressRules = {
-  requiresProvince: false,
-  provinceLabel: 'Region',
   zipLabel: 'Postal code',
   zipRequired: true,
 };
@@ -263,69 +264,54 @@ export const COUNTRIES: Country[] = [
 ];
 
 /**
- * Per-country address rules. Keys are ISO 3166-1 alpha-2 codes. Countries not
- * listed use {@link DEFAULT_ADDRESS_RULES}.
+ * Per-country postal-code rules. Keys are ISO 3166-1 alpha-2 codes. Countries
+ * not listed use {@link DEFAULT_ADDRESS_RULES}.
  *
- * Postal-code `zipPattern`s are anchored regex SOURCES (e.g.
- * `^[A-Z]{2}\\d\\s?\\d[A-Z]{2}$`); the schema wraps them with `^`/`$` already
- * included. They validate FORMAT only — we do not attempt to verify the code
- * exists (Shopify is the final arbiter at checkout).
- *
- * Province/subdivision is validated against a known code list
- * ({@link SUBDIVISIONS}) when one exists for the country — the form renders a
- * `<select>` so the buyer picks a real subdivision (full name shown, code sent)
- * instead of typing a free-text value the buyer naturally spells out in full
- * ("Pennsylvania") that would never match a rigid 2-letter pattern. Countries
- * with `requiresProvince: true` but no subdivision list (e.g. JP, CN, IN, MX)
- * accept free text — Shopify validates the `provinceCode` server-side.
+ * `zipPattern`s are anchored regex SOURCES (e.g. `^[A-Z]\\d[A-Z] ?\\d[A-Z]\\d$`);
+ * the schema wraps them with `^`/`$` already included. They validate FORMAT
+ * only — we do not attempt to verify the code exists (Shopify is the final
+ * arbiter at checkout). Only postal-code rules live here; the checkout form
+ * collects Address, City, and Country (no state/province) and lets Shopify
+ * derive the subdivision from the postal code.
  */
 const ADDRESS_RULES: Record<string, AddressRules> = {
   US: {
-    requiresProvince: true,
-    provinceLabel: 'State',
     zipLabel: 'ZIP code',
     zipRequired: true,
     zipPattern: '^\\d{5}(-\\d{4})?$',
   },
   CA: {
-    requiresProvince: true,
-    provinceLabel: 'Province',
     zipLabel: 'Postal code',
     zipRequired: true,
     zipPattern: '^[A-Z]\\d[A-Z] ?\\d[A-Z]\\d$',
   },
   GB: {
-    requiresProvince: false, // UK counties are optional for shipping.
-    provinceLabel: 'County',
     zipLabel: 'Postcode',
     zipRequired: true,
     // UK postcode — broad pattern, accepts with/without the single space.
     zipPattern: '^[A-Z]{1,2}\\d[A-Z\\d]? ?\\d[A-Z]{2}$',
   },
   AU: {
-    requiresProvince: true,
-    provinceLabel: 'State',
     zipLabel: 'Postcode',
     zipRequired: true,
     zipPattern: '^\\d{4}$',
   },
-  // EU majors — postal code required, subdivision optional. Germany, France,
-  // Spain, Italy, Netherlands, Belgium, Portugal, Ireland, etc.
-  DE: { requiresProvince: false, provinceLabel: 'Region', zipLabel: 'Postal code', zipRequired: true, zipPattern: '^\\d{5}$' },
-  FR: { requiresProvince: false, provinceLabel: 'Region', zipLabel: 'Postal code', zipRequired: true, zipPattern: '^\\d{5}$' },
-  ES: { requiresProvince: false, provinceLabel: 'Province', zipLabel: 'Postal code', zipRequired: true, zipPattern: '^\\d{5}$' },
-  IT: { requiresProvince: false, provinceLabel: 'Province', zipLabel: 'Postal code', zipRequired: true, zipPattern: '^\\d{5}$' },
-  NL: { requiresProvince: false, provinceLabel: 'Province', zipLabel: 'Postal code', zipRequired: true, zipPattern: '^\\d{4} ?[A-Z]{2}$' },
-  BE: { requiresProvince: false, provinceLabel: 'Province', zipLabel: 'Postal code', zipRequired: true, zipPattern: '^\\d{4}$' },
-  PT: { requiresProvince: false, provinceLabel: 'District', zipLabel: 'Postal code', zipRequired: true, zipPattern: '^\\d{4}-?\\d{3}$' },
-  IE: { requiresProvince: false, provinceLabel: 'County', zipLabel: 'Eircode', zipRequired: false, zipPattern: '^[A-Z\\d]{3} ?[A-Z\\d]{3}$' },
-  PL: { requiresProvince: false, provinceLabel: 'Province', zipLabel: 'Postal code', zipRequired: true, zipPattern: '^\\d{2}-?\\d{3}$' },
-  // Other large markets — postal code required, subdivision optional.
-  JP: { requiresProvince: true, provinceLabel: 'Prefecture', zipLabel: 'Postal code', zipRequired: true, zipPattern: '^\\d{3}-?\\d{4}$' },
-  CN: { requiresProvince: true, provinceLabel: 'Province', zipLabel: 'Postal code', zipRequired: true, zipPattern: '^\\d{6}$' },
-  IN: { requiresProvince: true, provinceLabel: 'State', zipLabel: 'PIN code', zipRequired: true, zipPattern: '^\\d{6}$' },
-  BR: { requiresProvince: true, provinceLabel: 'State', zipLabel: 'CEP', zipRequired: true, zipPattern: '^\\d{5}-?\\d{3}$' },
-  MX: { requiresProvince: true, provinceLabel: 'State', zipLabel: 'Postal code', zipRequired: true, zipPattern: '^\\d{5}$' },
+  // EU majors — postal code required.
+  DE: { zipLabel: 'Postal code', zipRequired: true, zipPattern: '^\\d{5}$' },
+  FR: { zipLabel: 'Postal code', zipRequired: true, zipPattern: '^\\d{5}$' },
+  ES: { zipLabel: 'Postal code', zipRequired: true, zipPattern: '^\\d{5}$' },
+  IT: { zipLabel: 'Postal code', zipRequired: true, zipPattern: '^\\d{5}$' },
+  NL: { zipLabel: 'Postal code', zipRequired: true, zipPattern: '^\\d{4} ?[A-Z]{2}$' },
+  BE: { zipLabel: 'Postal code', zipRequired: true, zipPattern: '^\\d{4}$' },
+  PT: { zipLabel: 'Postal code', zipRequired: true, zipPattern: '^\\d{4}-?\\d{3}$' },
+  IE: { zipLabel: 'Eircode', zipRequired: false, zipPattern: '^[A-Z\\d]{3} ?[A-Z\\d]{3}$' },
+  PL: { zipLabel: 'Postal code', zipRequired: true, zipPattern: '^\\d{2}-?\\d{3}$' },
+  // Other large markets — postal code required.
+  JP: { zipLabel: 'Postal code', zipRequired: true, zipPattern: '^\\d{3}-?\\d{4}$' },
+  CN: { zipLabel: 'Postal code', zipRequired: true, zipPattern: '^\\d{6}$' },
+  IN: { zipLabel: 'PIN code', zipRequired: true, zipPattern: '^\\d{6}$' },
+  BR: { zipLabel: 'CEP', zipRequired: true, zipPattern: '^\\d{5}-?\\d{3}$' },
+  MX: { zipLabel: 'Postal code', zipRequired: true, zipPattern: '^\\d{5}$' },
 };
 
 /** Look up the address rules for a country code, falling back to the default. */
@@ -336,84 +322,4 @@ export function addressRulesFor(countryCode: string): AddressRules {
 /** Is the given country code present in the country list? */
 export function isValidCountryCode(code: string): boolean {
   return COUNTRIES.some((c) => c.code === code);
-}
-
-// ---------------------------------------------------------------------------
-// Subdivision lists (states / provinces / regions) for the countries where a
-// rigid code is required AND a human would naturally type the full name
-// ("Pennsylvania") that no 2-letter pattern would accept. For these countries
-// the form renders a `<select>` (full name shown, ISO/Shopify code sent as
-// `provinceCode`), and the zod schema validates the chosen value against the
-// known code list. Countries with `requiresProvince: true` but no list here
-// (JP, CN, IN, MX) keep a free-text province input — Shopify validates the
-// `provinceCode` server-side.
-//
-// Codes are the subdivisions Shopify/ISO expect as `provinceCode`:
-//   US — 2-letter state codes (incl. DC)
-//   CA — 2-letter province/territory codes
-//   AU — 3-letter state/territory codes
-//   BR — 2-letter state codes
-// ---------------------------------------------------------------------------
-
-export interface Subdivision {
-  /** The code sent to Shopify as `provinceCode` (and validated by zod). */
-  code: string;
-  /** The full name shown in the `<select>`. */
-  name: string;
-}
-
-export const SUBDIVISIONS: Record<string, Subdivision[]> = {
-  US: [
-    { code: 'AL', name: 'Alabama' }, { code: 'AK', name: 'Alaska' }, { code: 'AZ', name: 'Arizona' },
-    { code: 'AR', name: 'Arkansas' }, { code: 'CA', name: 'California' }, { code: 'CO', name: 'Colorado' },
-    { code: 'CT', name: 'Connecticut' }, { code: 'DE', name: 'Delaware' }, { code: 'DC', name: 'District of Columbia' },
-    { code: 'FL', name: 'Florida' }, { code: 'GA', name: 'Georgia' }, { code: 'HI', name: 'Hawaii' },
-    { code: 'ID', name: 'Idaho' }, { code: 'IL', name: 'Illinois' }, { code: 'IN', name: 'Indiana' },
-    { code: 'IA', name: 'Iowa' }, { code: 'KS', name: 'Kansas' }, { code: 'KY', name: 'Kentucky' },
-    { code: 'LA', name: 'Louisiana' }, { code: 'ME', name: 'Maine' }, { code: 'MD', name: 'Maryland' },
-    { code: 'MA', name: 'Massachusetts' }, { code: 'MI', name: 'Michigan' }, { code: 'MN', name: 'Minnesota' },
-    { code: 'MS', name: 'Mississippi' }, { code: 'MO', name: 'Missouri' }, { code: 'MT', name: 'Montana' },
-    { code: 'NE', name: 'Nebraska' }, { code: 'NV', name: 'Nevada' }, { code: 'NH', name: 'New Hampshire' },
-    { code: 'NJ', name: 'New Jersey' }, { code: 'NM', name: 'New Mexico' }, { code: 'NY', name: 'New York' },
-    { code: 'NC', name: 'North Carolina' }, { code: 'ND', name: 'North Dakota' }, { code: 'OH', name: 'Ohio' },
-    { code: 'OK', name: 'Oklahoma' }, { code: 'OR', name: 'Oregon' }, { code: 'PA', name: 'Pennsylvania' },
-    { code: 'RI', name: 'Rhode Island' }, { code: 'SC', name: 'South Carolina' }, { code: 'SD', name: 'South Dakota' },
-    { code: 'TN', name: 'Tennessee' }, { code: 'TX', name: 'Texas' }, { code: 'UT', name: 'Utah' },
-    { code: 'VT', name: 'Vermont' }, { code: 'VA', name: 'Virginia' }, { code: 'WA', name: 'Washington' },
-    { code: 'WV', name: 'West Virginia' }, { code: 'WI', name: 'Wisconsin' }, { code: 'WY', name: 'Wyoming' },
-  ],
-  CA: [
-    { code: 'AB', name: 'Alberta' }, { code: 'BC', name: 'British Columbia' }, { code: 'MB', name: 'Manitoba' },
-    { code: 'NB', name: 'New Brunswick' }, { code: 'NL', name: 'Newfoundland and Labrador' },
-    { code: 'NS', name: 'Nova Scotia' }, { code: 'NT', name: 'Northwest Territories' }, { code: 'NU', name: 'Nunavut' },
-    { code: 'ON', name: 'Ontario' }, { code: 'PE', name: 'Prince Edward Island' }, { code: 'QC', name: 'Quebec' },
-    { code: 'SK', name: 'Saskatchewan' }, { code: 'YT', name: 'Yukon' },
-  ],
-  AU: [
-    { code: 'ACT', name: 'Australian Capital Territory' }, { code: 'NSW', name: 'New South Wales' },
-    { code: 'NT', name: 'Northern Territory' }, { code: 'QLD', name: 'Queensland' },
-    { code: 'SA', name: 'South Australia' }, { code: 'TAS', name: 'Tasmania' },
-    { code: 'VIC', name: 'Victoria' }, { code: 'WA', name: 'Western Australia' },
-  ],
-  BR: [
-    { code: 'AC', name: 'Acre' }, { code: 'AL', name: 'Alagoas' }, { code: 'AP', name: 'Amapá' },
-    { code: 'AM', name: 'Amazonas' }, { code: 'BA', name: 'Bahia' }, { code: 'CE', name: 'Ceará' },
-    { code: 'DF', name: 'Distrito Federal' }, { code: 'ES', name: 'Espírito Santo' }, { code: 'GO', name: 'Goiás' },
-    { code: 'MA', name: 'Maranhão' }, { code: 'MT', name: 'Mato Grosso' }, { code: 'MS', name: 'Mato Grosso do Sul' },
-    { code: 'MG', name: 'Minas Gerais' }, { code: 'PA', name: 'Pará' }, { code: 'PB', name: 'Paraíba' },
-    { code: 'PR', name: 'Paraná' }, { code: 'PE', name: 'Pernambuco' }, { code: 'PI', name: 'Piauí' },
-    { code: 'RJ', name: 'Rio de Janeiro' }, { code: 'RN', name: 'Rio Grande do Norte' },
-    { code: 'RS', name: 'Rio Grande do Sul' }, { code: 'RO', name: 'Rondônia' }, { code: 'RR', name: 'Roraima' },
-    { code: 'SC', name: 'Santa Catarina' }, { code: 'SP', name: 'São Paulo' }, { code: 'SE', name: 'Sergipe' },
-    { code: 'TO', name: 'Tocantins' },
-  ],
-};
-
-/**
- * Look up the subdivision list for a country. Returns `undefined` when the
- * country has no known list (the form then renders a free-text province input
- * and Shopify validates the `provinceCode` server-side).
- */
-export function subdivisionsFor(countryCode: string): Subdivision[] | undefined {
-  return SUBDIVISIONS[countryCode];
 }

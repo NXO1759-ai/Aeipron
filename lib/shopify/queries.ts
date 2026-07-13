@@ -402,9 +402,10 @@ export const CART_LINES_REMOVE_MUTATION = `#graphql
 // streaming client + a qualifying plan).
 //
 // Trust invariants (same as the line mutations):
-//   - Variables carry only contact/address fields, countryCode, provinceCode,
+//   - Variables carry only contact/address fields, countryCode, zip,
 //     deliveryGroupId, deliveryOptionHandle. NO price is ever sent — Shopify
-//     prices every line and computes shipping/tax itself.
+//     prices every line and computes shipping/tax itself. (No provinceCode is
+//     sent — Shopify derives the subdivision from the postal code.)
 //   - `cartId` is the opaque cart id (incl. `?key=`) from the cookie, passed
 //     VERBATIM — never parsed/logged/returned.
 //   - `userErrors` are logged server-side; the client gets a generic message.
@@ -514,7 +515,8 @@ export const CART_BUYER_IDENTITY_UPDATE_MUTATION = `#graphql
  * `addresses` is `[CartSelectableAddressInput!]!`; the action passes a single
  * entry with `selected: true` (which triggers rate calculation for that address)
  * and `address.deliveryAddress` (a CartDeliveryAddressInput — countryCode is a
- * code, province is provinceCode). Used when no delivery address exists yet.
+ * code; no provinceCode is sent, Shopify derives the subdivision from zip).
+ * Used when no delivery address exists yet.
  *
  * Named operation `CartDeliveryAddressesAdd` for Shopify query tracking.
  */

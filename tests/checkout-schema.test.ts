@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { checkoutContactSchema, toShopifyAddress } from '@/lib/checkout-schema';
-import { COUNTRIES, addressRulesFor, isValidCountryCode, subdivisionsFor, SUBDIVISIONS } from '@/lib/countries';
+import { COUNTRIES, addressRulesFor, isValidCountryCode } from '@/lib/countries';
 
 // ---------------------------------------------------------------------------
 // Checkout zod schema — pure validation tests (no DOM needed).
@@ -17,7 +17,6 @@ const VALID_BASE = {
   address1: '123 Main St',
   address2: '',
   city: 'Springfield',
-  province: 'IL',
   zip: '62704',
   country: 'US',
 };
@@ -102,12 +101,12 @@ describe('checkoutContactSchema — country', () => {
 
   it('accepts every code in the country list', () => {
     for (const c of COUNTRIES) {
-      // Build a minimal valid payload for that country (province/zip may be
-      // optional). We only assert the COUNTRY field itself does not error;
-      // province/zip rules are covered by the per-country suites below.
+      // Build a minimal valid payload for that country (zip may be optional).
+      // We only assert the COUNTRY field itself does not error; postal-code
+      // rules are covered by the per-country suites below.
       const r = checkoutContactSchema.safeParse({ ...VALID_BASE, country: c.code });
       // The country path must NOT be in the issues (other fields may be, if the
-      // default US province/zip don't fit this country — that's fine here).
+      // default US ZIP doesn't fit this country — that's fine here).
       const paths = r.success ? [] : r.error.issues.map((i) => i.path.join('.'));
       expect(paths).not.toContain('country');
     }
@@ -115,23 +114,6 @@ describe('checkoutContactSchema — country', () => {
 });
 
 describe('checkoutContactSchema — US rules', () => {
-  it('requires a state', () => {
-    expect(issuePaths(payload({ province: '' }))).toContain('province');
-  });
-
-  it('rejects a full state name (the buyer must pick from the list, which sends the code)', () => {
-    // The form renders a <select> for US states, so the browser sends a code.
-    // A crafted/tampered value like the full name "Pennsylvania" must be rejected
-    // server-side (never trust the client) — only a known 2-letter code is valid.
-    expect(issuePaths(payload({ province: 'Pennsylvania' }))).toContain('province');
-    expect(issuePaths(payload({ province: 'Illinois' }))).toContain('province');
-  });
-
-  it('accepts a valid 2-letter state code', () => {
-    expect(checkoutContactSchema.safeParse(payload({ province: 'PA' })).success).toBe(true);
-    expect(checkoutContactSchema.safeParse(payload({ province: 'NY' })).success).toBe(true);
-  });
-
   it('requires a ZIP', () => {
     expect(issuePaths(payload({ zip: '' }))).toContain('zip');
   });
@@ -146,15 +128,7 @@ describe('checkoutContactSchema — US rules', () => {
 });
 
 describe('checkoutContactSchema — CA rules', () => {
-  const CA = { ...VALID_BASE, country: 'CA', province: 'ON', zip: 'K1A 0B1' };
-
-  it('requires a province', () => {
-    expect(issuePaths({ ...CA, province: '' })).toContain('province');
-  });
-
-  it('accepts a 2-letter province code', () => {
-    expect(checkoutContactSchema.safeParse(CA).success).toBe(true);
-  });
+  const CA = { ...VALID_BASE, country: 'CA', zip: 'K1A 0B1' };
 
   it('accepts a Canadian postal code with or without the space', () => {
     expect(checkoutContactSchema.safeParse({ ...CA, zip: 'K1A0B1' }).success).toBe(true);
@@ -166,11 +140,7 @@ describe('checkoutContactSchema — CA rules', () => {
 });
 
 describe('checkoutContactSchema — GB rules', () => {
-  const GB = { ...VALID_BASE, country: 'GB', province: '', zip: 'SW1A 1AA' };
-
-  it('does NOT require a province (county optional)', () => {
-    expect(checkoutContactSchema.safeParse(GB).success).toBe(true);
-  });
+  const GB = { ...VALID_BASE, country: 'GB', zip: 'SW1A 1AA' };
 
   it('requires a postcode', () => {
     expect(issuePaths({ ...GB, zip: '' })).toContain('zip');
@@ -182,39 +152,34 @@ describe('checkoutContactSchema — GB rules', () => {
 });
 
 describe('checkoutContactSchema — AU rules', () => {
-  const AU = { ...VALID_BASE, country: 'AU', province: 'NSW', zip: '2000' };
+  const AU = { ...VALID_BASE, country: 'AU', zip: '2000' };
 
-  it('requires a 3-letter state', () => {
-    expect(issuePaths({ ...AU, province: 'New South Wales' })).toContain('province');
-  });
-
-  it('accepts a 3-letter state + 4-digit postcode', () => {
+  it('accepts a 4-digit postcode', () => {
     expect(checkoutContactSchema.safeParse(AU).success).toBe(true);
   });
 });
 
 describe('checkoutContactSchema — EU majors', () => {
-  it('DE: 5-digit postal required, region optional', () => {
-    expect(checkoutContactSchema.safeParse({ ...VALID_BASE, country: 'DE', province: '', zip: '10115' }).success).toBe(true);
-    expect(issuePaths({ ...VALID_BASE, country: 'DE', province: '', zip: '' })).toContain('zip');
+  it('DE: 5-digit postal required', () => {
+    expect(checkoutContactSchema.safeParse({ ...VALID_BASE, country: 'DE', zip: '10115' }).success).toBe(true);
+    expect(issuePaths({ ...VALID_BASE, country: 'DE', zip: '' })).toContain('zip');
   });
 
   it('NL: accepts 1234 AB postcode (with or without space)', () => {
-    expect(checkoutContactSchema.safeParse({ ...VALID_BASE, country: 'NL', province: '', zip: '1234 AB' }).success).toBe(true);
-    expect(checkoutContactSchema.safeParse({ ...VALID_BASE, country: 'NL', province: '', zip: '1234AB' }).success).toBe(true);
+    expect(checkoutContactSchema.safeParse({ ...VALID_BASE, country: 'NL', zip: '1234 AB' }).success).toBe(true);
+    expect(checkoutContactSchema.safeParse({ ...VALID_BASE, country: 'NL', zip: '1234AB' }).success).toBe(true);
   });
 
   it('IE: postcode optional (Eircode optional)', () => {
-    expect(checkoutContactSchema.safeParse({ ...VALID_BASE, country: 'IE', province: '', zip: '' }).success).toBe(true);
+    expect(checkoutContactSchema.safeParse({ ...VALID_BASE, country: 'IE', zip: '' }).success).toBe(true);
   });
 });
 
 describe('checkoutContactSchema — default rules (country with no explicit entry)', () => {
-  it('falls back to default rules (province optional, zip required)', () => {
+  it('falls back to default rules (zip required)', () => {
     // Pick a country not in ADDRESS_RULES (e.g. 'BO' Bolivia).
-    const r = checkoutContactSchema.safeParse({ ...VALID_BASE, country: 'BO', province: '', zip: '' });
+    const r = checkoutContactSchema.safeParse({ ...VALID_BASE, country: 'BO', zip: '' });
     const paths = r.success ? [] : r.error.issues.map((i) => i.path.join('.'));
-    expect(paths).not.toContain('province'); // province optional by default
     expect(paths).toContain('zip'); // zip required by default
   });
 });
@@ -237,10 +202,10 @@ describe('toShopifyAddress — trust invariant (no price)', () => {
     expect(out.buyerIdentity.countryCode).toBe('US');
   });
 
-  it('passes provinceCode and zip when present', () => {
+  it('passes zip when present (no provinceCode is ever sent)', () => {
     const out = toShopifyAddress(parsed);
-    expect(out.deliveryAddress.provinceCode).toBe('IL');
     expect(out.deliveryAddress.zip).toBe('62704');
+    expect(out.deliveryAddress).not.toHaveProperty('provinceCode');
   });
 
   it('NEVER includes a price field in the output', () => {
@@ -250,13 +215,13 @@ describe('toShopifyAddress — trust invariant (no price)', () => {
     expect(json).not.toContain('"amount"');
   });
 
-  it('omits provinceCode/zip/address2 when empty (no empty strings sent)', () => {
-    // IE: province optional + Eircode optional, so an empty province/zip is valid.
-    const noExtras = checkoutContactSchema.parse({ ...VALID_BASE, address2: '', province: '', zip: '', country: 'IE' });
+  it('omits zip/address2 when empty (no empty strings sent)', () => {
+    // IE: Eircode optional, so an empty zip is valid.
+    const noExtras = checkoutContactSchema.parse({ ...VALID_BASE, address2: '', zip: '', country: 'IE' });
     const out = toShopifyAddress(noExtras);
-    expect(out.deliveryAddress.provinceCode).toBeUndefined();
     expect(out.deliveryAddress.zip).toBeUndefined();
     expect(out.deliveryAddress.address2).toBeUndefined();
+    expect(out.deliveryAddress).not.toHaveProperty('provinceCode');
   });
 });
 
@@ -281,37 +246,6 @@ describe('countries — data integrity', () => {
   });
 
   it('addressRulesFor returns the default for an unmapped country', () => {
-    expect(addressRulesFor('XX').requiresProvince).toBe(false);
-  });
-});
-
-describe('countries — subdivision lists (state/province <select> data)', () => {
-  it('has lists for US, CA, AU, BR (the rigid-code countries)', () => {
-    expect(SUBDIVISIONS.US.length).toBeGreaterThan(50); // 50 states + DC
-    expect(SUBDIVISIONS.CA.length).toBe(13);
-    expect(SUBDIVISIONS.AU.length).toBe(8);
-    expect(SUBDIVISIONS.BR.length).toBe(27);
-  });
-
-  it('every subdivision has a non-empty code + name', () => {
-    for (const list of Object.values(SUBDIVISIONS)) {
-      for (const s of list) {
-        expect(s.code.length).toBeGreaterThan(0);
-        expect(s.name.length).toBeGreaterThan(0);
-      }
-    }
-  });
-
-  it('US list includes the codes used in the fixtures/tests (IL, NY, PA) as 2-letter codes', () => {
-    const codes = SUBDIVISIONS.US.map((s) => s.code);
-    for (const c of ['IL', 'NY', 'PA']) {
-      expect(codes).toContain(c);
-    }
-    expect(codes).not.toContain('Pennsylvania'); // full names are display-only
-  });
-
-  it('subdivisionsFor returns the list for a known country and undefined otherwise', () => {
-    expect(subdivisionsFor('US')).toBeDefined();
-    expect(subdivisionsFor('ZZ')).toBeUndefined();
+    expect(addressRulesFor('XX').zipRequired).toBe(true);
   });
 });

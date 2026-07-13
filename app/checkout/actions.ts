@@ -22,9 +22,10 @@
 //
 // SECURITY / TRUST INVARIANTS (enforced here + in tests):
 //   - The browser NEVER sends a price. Inputs carry only contact fields,
-//     countryCode/provinceCode, address fields, deliveryGroupId, and
-//     deliveryOptionHandle (an opaque Shopify handle). Shopify prices every
-//     line and computes shipping + tax itself.
+//     countryCode, address fields (incl. zip), deliveryGroupId, and
+//     deliveryOptionHandle (an opaque Shopify handle). No provinceCode is sent
+//     — Shopify derives the subdivision from the postal code. Shopify prices
+//     every line and computes shipping + tax itself.
 //   - The Shopify cart.id (incl. the `?key=` secret) is OPAQUE — passed VERBATIM
 //     to Shopify, never logged, parsed, or returned to the client.
 //   - GraphQL `userErrors` AND `warnings` are logged server-side only; the
@@ -102,8 +103,9 @@ function logWarnings(warnings: unknown[] | undefined, scope: string): void {
  * cart expired mid-flow (cookie cleared). Throws a generic error on userErrors
  * or a bad payload — the client shows a retry message.
  *
- * The browser sends only contact + address fields (and countryCode/provinceCode)
- * — never a price.
+ * The browser sends only contact + address fields (and countryCode + zip — no
+ * provinceCode; Shopify derives the subdivision from the postal code) — never
+ * a price.
  */
 export async function updateCheckoutContact(input: unknown): Promise<CheckoutDetails | null> {
   // Re-validate server-side. The client already validated with the same schema,
