@@ -387,3 +387,217 @@ export const CART_LINES_REMOVE_MUTATION = `#graphql
   }
   ${CART_FRAGMENT}
 `;
+
+// ---------------------------------------------------------------------------
+// Shopify Cart delivery + buyer-identity operations (Phase 4b — custom checkout).
+//
+// These power the custom /checkout page: set the buyer's email/phone/country,
+// set the shipping delivery address (selected: true triggers rate calc), and
+// select a shipping method — all BEFORE handing off to cart.checkoutUrl,
+// which then prefills Shopify's hosted checkout (card entry happens there).
+//
+// Flat/static shipping rates are returned synchronously via
+// `cart.deliveryGroups.nodes[].deliveryOptions` — NO @defer / withCarrierRates
+// (carrier-calculated rates are out of scope for v1; they'd need @defer + a
+// streaming client + a qualifying plan).
+//
+// Trust invariants (same as the line mutations):
+//   - Variables carry only contact/address fields, countryCode, provinceCode,
+//     deliveryGroupId, deliveryOptionHandle. NO price is ever sent — Shopify
+//     prices every line and computes shipping/tax itself.
+//   - `cartId` is the opaque cart id (incl. `?key=`) from the cookie, passed
+//     VERBATIM — never parsed/logged/returned.
+//   - `userErrors` are logged server-side; the client gets a generic message.
+//     These mutations ALSO return `warnings` (non-fatal, e.g. "address could
+//     not be validated") — logged server-side, never surfaced, never block.
+//
+// Deprecated fields avoided:
+//   - `deliveryAddressPreferences` on CartBuyerIdentityInput (deprecated since
+//     2025-01) — we set the address via cartDeliveryAddressesAdd/Update instead.
+//   - `estimatedCost` (Cart.estimatedCost), cart-level `discountAllocations`,
+//     `totalTaxAmount`, `totalDutyAmount`, `MailingAddressInput` — none used.
+// ---------------------------------------------------------------------------
+
+/**
+ * Delivery-group fields shared by the cart-with-delivery query and the Phase 4b
+ * mutations. Selects the available `deliveryOptions` (shipping methods + their
+ * `estimatedCost`) and the currently `selectedDeliveryOption`, on each delivery
+ * group. v1 reads the PRIMARY group only (deliveryGroups.nodes[0]); multi-group
+ * / split-shipment UI is out of scope.
+ */
+const DELIVERY_GROUPS_FRAGMENT = `#graphql
+  fragment DeliveryGroupsFields on Cart {
+    deliveryGroups(first: 250) {
+      nodes {
+        id
+        selectedDeliveryOption {
+          handle
+          code
+          title
+          description
+          estimatedCost {
+            amount
+            currencyCode
+          }
+          deliveryMethodType
+        }
+        deliveryOptions {
+          handle
+          code
+          title
+          description
+          estimatedCost {
+            amount
+            currencyCode
+          }
+          deliveryMethodType
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * Operation 10 — read a cart by id WITH its delivery groups (shipping options).
+ *
+ * Used by the checkout server actions to (a) detect an existing selected
+ * delivery address (so we update rather than accumulate on re-submit) and
+ * (b) read the available delivery options after setting the address. Differs
+ * from CART_GET_QUERY only by additionally selecting deliveryGroups.
+ *
+ * Named operation `CartWithDelivery` for Shopify query tracking.
+ */
+export const CART_WITH_DELIVERY_QUERY = `#graphql
+  query CartWithDelivery($id: ID!) {
+    cart(id: $id) {
+      ...CartFields
+      ...DeliveryGroupsFields
+    }
+  }
+  ${CART_FRAGMENT}
+  ${DELIVERY_GROUPS_FRAGMENT}
+`;
+
+/**
+ * Operation 11 — set the buyer's email, phone, and country (for market pricing).
+ *
+ * Sets ONLY the contact fields — the shipping ADDRESS is set separately via
+ * CART_DELIVERY_ADDRESSES_ADD/UPDATE (deliveryAddressPreferences is deprecated).
+ * `buyerIdentity` is passed as a typed CartBuyerIdentityInput variable.
+ *
+ * Named operation `CartBuyerIdentityUpdate` for Shopify query tracking.
+ */
+export const CART_BUYER_IDENTITY_UPDATE_MUTATION = `#graphql
+  mutation CartBuyerIdentityUpdate($cartId: ID!, $buyerIdentity: CartBuyerIdentityInput!) {
+    cartBuyerIdentityUpdate(cartId: $cartId, buyerIdentity: $buyerIdentity) {
+      cart {
+        ...CartFields
+        ...DeliveryGroupsFields
+      }
+      userErrors {
+        field
+        message
+      }
+      warnings {
+        code
+        message
+      }
+    }
+  }
+  ${CART_FRAGMENT}
+  ${DELIVERY_GROUPS_FRAGMENT}
+`;
+
+/**
+ * Operation 12 — add a delivery (shipping) address to the cart.
+ *
+ * `addresses` is `[CartSelectableAddressInput!]!`; the action passes a single
+ * entry with `selected: true` (which triggers rate calculation for that address)
+ * and `address.deliveryAddress` (a CartDeliveryAddressInput — countryCode is a
+ * code, province is provinceCode). Used when no delivery address exists yet.
+ *
+ * Named operation `CartDeliveryAddressesAdd` for Shopify query tracking.
+ */
+export const CART_DELIVERY_ADDRESSES_ADD_MUTATION = `#graphql
+  mutation CartDeliveryAddressesAdd($cartId: ID!, $addresses: [CartSelectableAddressInput!]!) {
+    cartDeliveryAddressesAdd(cartId: $cartId, addresses: $addresses) {
+      cart {
+        ...CartFields
+        ...DeliveryGroupsFields
+      }
+      userErrors {
+        field
+        message
+      }
+      warnings {
+        code
+        message
+      }
+    }
+  }
+  ${CART_FRAGMENT}
+  ${DELIVERY_GROUPS_FRAGMENT}
+`;
+
+/**
+ * Operation 13 — update an existing delivery address on the cart (by its id).
+ *
+ * Used when the buyer re-submits the address form after an address already
+ * exists (idempotent: avoids accumulating duplicate addresses). `addresses` is
+ * `[CartSelectableAddressUpdateInput!]!`; each entry needs the address `id`
+ * (the CartSelectableAddress GID), `selected: true`, and the new address.
+ *
+ * Named operation `CartDeliveryAddressesUpdate` for Shopify query tracking.
+ */
+export const CART_DELIVERY_ADDRESSES_UPDATE_MUTATION = `#graphql
+  mutation CartDeliveryAddressesUpdate($cartId: ID!, $addresses: [CartSelectableAddressUpdateInput!]!) {
+    cartDeliveryAddressesUpdate(cartId: $cartId, addresses: $addresses) {
+      cart {
+        ...CartFields
+        ...DeliveryGroupsFields
+      }
+      userErrors {
+        field
+        message
+      }
+      warnings {
+        code
+        message
+      }
+    }
+  }
+  ${CART_FRAGMENT}
+  ${DELIVERY_GROUPS_FRAGMENT}
+`;
+
+/**
+ * Operation 14 — select a shipping method (delivery option) on the cart.
+ *
+ * `selectedDeliveryOptions` is `[CartSelectedDeliveryOptionInput!]!`; each
+ * entry pairs a `deliveryGroupId` with the chosen `deliveryOptionHandle` (the
+ * `handle` from a CartDeliveryOption read off deliveryGroups). After this
+ * mutation, the cart's `cost.totalAmount` reflects the selected shipping cost
+ * (still an estimate — tax/duty computed at Shopify's hosted checkout).
+ *
+ * Named operation `CartSelectedDeliveryOptionsUpdate` for Shopify query tracking.
+ */
+export const CART_SELECTED_DELIVERY_OPTIONS_UPDATE_MUTATION = `#graphql
+  mutation CartSelectedDeliveryOptionsUpdate($cartId: ID!, $selectedDeliveryOptions: [CartSelectedDeliveryOptionInput!]!) {
+    cartSelectedDeliveryOptionsUpdate(cartId: $cartId, selectedDeliveryOptions: $selectedDeliveryOptions) {
+      cart {
+        ...CartFields
+        ...DeliveryGroupsFields
+      }
+      userErrors {
+        field
+        message
+      }
+      warnings {
+        code
+        message
+      }
+    }
+  }
+  ${CART_FRAGMENT}
+  ${DELIVERY_GROUPS_FRAGMENT}
+`;

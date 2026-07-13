@@ -122,3 +122,46 @@ export interface Cart {
   currencyCode: string;
   lines: CartLine[];
 }
+
+// ---------------------------------------------------------------------------
+// Cart delivery types (Phase 4b — custom checkout).
+//
+// These back the custom /checkout page: the available shipping methods
+// (DeliveryOption[]) and the currently-selected one, grouped per delivery
+// group. Money is parsed from Shopify Decimal strings → number at the adapter
+// boundary (same convention as Cart). v1 reads the PRIMARY delivery group only
+// (the first); multi-group / split-shipment UI is out of scope.
+//
+// `DeliveryOption.handle` is the opaque string passed back to
+// `cartSelectedDeliveryOptionsUpdate` as `deliveryOptionHandle`. The browser
+// sends only `handle` + `deliveryGroupId` — never a price (trust invariant).
+// ---------------------------------------------------------------------------
+
+/** A shipping method + its estimated cost, as shown in the checkout shipping step. */
+export interface DeliveryOption {
+  handle: string; // opaque — passed back to cartSelectedDeliveryOptionsUpdate
+  code: string | null;
+  title: string | null;
+  description: string | null;
+  cost: { amount: number; currencyCode: string }; // parsed from estimatedCost
+  deliveryMethodType: string; // SHIPPING | PICKUP | LOCAL (Storefront enum)
+}
+
+/** A delivery group: the available shipping options + the currently selected one. */
+export interface DeliveryGroup {
+  id: string; // the deliveryGroupId passed to cartSelectedDeliveryOptionsUpdate
+  deliveryOptions: DeliveryOption[];
+  selectedHandle: string | null; // handle of the selected option, or null if none
+}
+
+/**
+ * The cart snapshot + its delivery groups — returned by the checkout server
+ * actions so the /checkout page can render the order summary (from `cart`) and
+ * the shipping-method choices (from `deliveryGroups`) in one round trip.
+ * `cart` is the unchanged domain `Cart` (mapCart); `deliveryGroups` is the new
+ * mapping (mapDeliveryGroups).
+ */
+export interface CheckoutDetails {
+  cart: Cart;
+  deliveryGroups: DeliveryGroup[];
+}

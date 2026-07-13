@@ -157,6 +157,42 @@ export interface ShopifyCartNode {
   checkoutUrl: string;
   cost: ShopifyCartCost;
   lines: { edges: { node: ShopifyCartLine }[] };
+  // Optional — only populated by queries/mutations that select the
+  // deliveryGroups connection (CART_WITH_DELIVERY_QUERY + the Phase 4b
+  // checkout mutations). Absent on the plain CART_GET_QUERY / line mutations,
+  // so the adapter treats it as optional and defaults to no delivery groups.
+  deliveryGroups?: { nodes: ShopifyCartDeliveryGroup[] };
+}
+
+// ---------------------------------------------------------------------------
+// Cart delivery shapes (Phase 4b — custom checkout).
+//
+// `cart.deliveryGroups.nodes[]` holds the cart's delivery groups; each group
+// exposes the set `deliveryAddress`, the currently `selectedDeliveryOption`,
+// and the available `deliveryOptions` (the shipping methods + their costs).
+// Flat/static rates are returned synchronously — no @defer needed (carrier-
+// calculated rates, which need @defer, are out of scope for v1).
+//
+// `selectedDeliveryOption` / `deliveryOptions[]` share the same shape
+// (ShopifyCartDeliveryOption); the selected one is nullable until the buyer
+// (or auto-select) picks one.
+// ---------------------------------------------------------------------------
+
+/** A delivery option (a shipping method + its estimated cost). */
+export interface ShopifyCartDeliveryOption {
+  handle: string; // passed to cartSelectedDeliveryOptionsUpdate as deliveryOptionHandle
+  code: string | null;
+  title: string | null;
+  description: string | null;
+  estimatedCost: ShopifyCartMoney; // MoneyV2 — amount (string) + currencyCode
+  deliveryMethodType: string; // DeliveryMethodType enum: SHIPPING | PICKUP | LOCAL
+}
+
+/** A delivery group: the address + the available/selected shipping options. */
+export interface ShopifyCartDeliveryGroup {
+  id: string; // the deliveryGroupId passed to cartSelectedDeliveryOptionsUpdate
+  selectedDeliveryOption: ShopifyCartDeliveryOption | null;
+  deliveryOptions: ShopifyCartDeliveryOption[];
 }
 
 /** Shopify userErrors shape returned by cart mutations. */
@@ -188,4 +224,51 @@ export interface ShopifyCartLinesUpdateResponse {
 /** Response shape for `cartLinesRemove` (CART_LINES_REMOVE_MUTATION). */
 export interface ShopifyCartLinesRemoveResponse {
   cartLinesRemove: { cart: ShopifyCartNode | null; userErrors: ShopifyCartUserError[] };
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4b — custom checkout mutation responses.
+//
+// The buyer-identity + delivery-address + selected-delivery-option mutations
+// return a `warnings` array IN ADDITION to `userErrors`. `userErrors` are
+// hard failures (we throw a generic message); `warnings` are non-fatal (e.g.
+// "address could not be validated") — logged server-side, never surfaced to
+// the client, never block the flow. Typed as `unknown[]` because we only log
+// them and never read their shape.
+// ---------------------------------------------------------------------------
+
+/** Response shape for `cartBuyerIdentityUpdate`. */
+export interface ShopifyCartBuyerIdentityUpdateResponse {
+  cartBuyerIdentityUpdate: {
+    cart: ShopifyCartNode | null;
+    userErrors: ShopifyCartUserError[];
+    warnings: unknown[];
+  };
+}
+
+/** Response shape for `cartDeliveryAddressesAdd`. */
+export interface ShopifyCartDeliveryAddressesAddResponse {
+  cartDeliveryAddressesAdd: {
+    cart: ShopifyCartNode | null;
+    userErrors: ShopifyCartUserError[];
+    warnings: unknown[];
+  };
+}
+
+/** Response shape for `cartDeliveryAddressesUpdate`. */
+export interface ShopifyCartDeliveryAddressesUpdateResponse {
+  cartDeliveryAddressesUpdate: {
+    cart: ShopifyCartNode | null;
+    userErrors: ShopifyCartUserError[];
+    warnings: unknown[];
+  };
+}
+
+/** Response shape for `cartSelectedDeliveryOptionsUpdate`. */
+export interface ShopifyCartSelectedDeliveryOptionsUpdateResponse {
+  cartSelectedDeliveryOptionsUpdate: {
+    cart: ShopifyCartNode | null;
+    userErrors: ShopifyCartUserError[];
+    warnings: unknown[];
+  };
 }
