@@ -3,12 +3,12 @@
 //
 // --- Shopify-backed (Phase 1): getCollections, getCollectionByHandle,
 // ---                          getProductBySlug ---
-// --- Mock-backed (removed in later phases): getOrganizer*, getCatalogPrice,
-// ---     getShipping, constants, ORGANIZERS, skuIndex ---
+// --- Mock-backed (until Phase 4 / Metaobjects): getOrganizer*,
+// ---     ORGANIZERS, organizerById ---
 //
-// Product + collection reads go through the Shopify Storefront API. The mock
-// pricing index (skuIndex) and organizer data remain until Phases 2–4 rewire
-// the cart, checkout, and organizer routes.
+// Product + collection reads go through the Shopify Storefront API. Pricing
+// comes from Shopify (cart line `cost.amountPerQuantity`); no mock price source
+// remains here. Organizer data is still mock-backed until Phase 4 (Metaobjects).
 //
 // Do not import this file from a 'use client' component. It is server-only data
 // and must not be shipped to the browser bundle.
@@ -29,7 +29,7 @@ import type {
 } from '@/lib/shopify/types';
 
 // ---------------------------------------------------------------------------
-// Mock data — organizers + pricing index (removed in Phases 2–4)
+// Mock data — organizers (removed in Phase 4 / Metaobjects)
 // ---------------------------------------------------------------------------
 
 const ORGANIZERS: Organizer[] = [
@@ -48,19 +48,6 @@ const ORGANIZERS: Organizer[] = [
 ];
 
 const organizerById = new Map(ORGANIZERS.map((o) => [o.id, o]));
-
-// Pricing index for the checkout server action (mock-backed until Phase 3).
-// Only organizer merch is indexed here — product pricing now comes from Shopify.
-interface Sku {
-  price: number;
-  sizes: Set<string>;
-}
-const skuIndex = new Map<string, Sku>();
-for (const o of ORGANIZERS) {
-  for (const m of o.merch) {
-    skuIndex.set(m.id, { price: m.price, sizes: new Set(m.sizes) });
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Read API — Shopify-backed collection + product reads; mock-backed organizers
@@ -98,22 +85,4 @@ export function getOrganizer(id: string): Organizer | null {
 
 export function getOrganizerSummaries(): Pick<Organizer, 'id' | 'name' | 'image'>[] {
   return ORGANIZERS.map(({ id, name, image }) => ({ id, name, image }));
-}
-
-// ---------------------------------------------------------------------------
-// Mock pricing — removed in Phase 3 when Shopify cart replaces the checkout
-// ---------------------------------------------------------------------------
-
-export function getCatalogPrice(id: string, size: string): number {
-  const sku = skuIndex.get(id);
-  if (!sku) throw new Error(`Unknown product: ${id}`);
-  if (!sku.sizes.has(size)) throw new Error(`Size ${size} not available for ${id}`);
-  return sku.price;
-}
-
-export const FREE_SHIPPING_THRESHOLD = 200;
-export const FLAT_SHIPPING_RATE = 15;
-
-export function getShipping(subtotal: number): number {
-  return subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : FLAT_SHIPPING_RATE;
 }

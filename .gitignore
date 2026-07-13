@@ -8,6 +8,6 @@ coverage/
 AGENTS.md
 /docs
 /graphify-out
-
+/.superpowers
 # TypeScript incremental build cache
 *.tsbuildinfo
