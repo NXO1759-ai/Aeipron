@@ -5,11 +5,17 @@ import { formatCurrency } from '@/lib/utils';
 import { CheckoutButton } from './CheckoutButton';
 
 // ---------------------------------------------------------------------------
-// /checkout — the redirect-to-Shopify-hosted-checkout flow (the store's
-// original checkout integration).
+// /checkout — a review + redirect page (DORMANT in the active flow).
 //
-// A Server Component shell that reads the Shopify cart once (server-side, so
-// the order summary is stable and there is no hydration mismatch) and either:
+// The active checkout flow no longer stops here: the cart drawer and the /cart
+// page redirect DIRECTLY to Shopify's hosted checkout via the shared
+// useCheckoutRedirect hook (cart → Shopify in one click, no intermediate
+// page). This route is kept in the repo, reachable only by direct URL, so the
+// custom two-phase checkout can be re-wired here later with no extra effort.
+//
+// When rendered (direct navigation), it is a Server Component shell that reads
+// the Shopify cart once (server-side, so the order summary is stable and there
+// is no hydration mismatch) and either:
 //   - shows the dark empty-bag view (no cookie / expired cart / zero lines), or
 //   - renders a dark two-pane review: left = heading + a <CheckoutButton> that
 //     fetches `cart.checkoutUrl` and redirects the browser to Shopify's hosted

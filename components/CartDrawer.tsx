@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X } from 'lucide-react';
 import Link from 'next/link';
 import { CartLineItem } from '@/components/CartLineItem';
+import { useCheckoutRedirect } from '@/hooks/use-checkout-redirect';
 
 export function CartDrawer() {
   const {
@@ -22,6 +23,8 @@ export function CartDrawer() {
     removeItem,
   } = useCart();
   const hydrated = useHydrated();
+  const { status: checkoutStatus, redirect: redirectToCheckout, reset: resetCheckout } =
+    useCheckoutRedirect();
 
   // Before hydration, render the empty/zero baseline so SSR and client agree.
   const count = hydrated ? totalQuantity : 0;
@@ -104,13 +107,34 @@ export function CartDrawer() {
                   <span>Subtotal</span>
                   <span className="font-mono">{subtotal}</span>
                 </div>
-                <Link
-                  href="/checkout"
-                  onClick={closeCart}
-                  className="block w-full bg-primary-cream text-primary-obsidian py-4 text-center uppercase tracking-widest font-bold hover:bg-white transition-colors"
-                >
-                  Proceed to checkout
-                </Link>
+
+                {checkoutStatus === 'error' ? (
+                  <div className="w-full">
+                    <button
+                      type="button"
+                      onClick={resetCheckout}
+                      className="block w-full border border-ui-concrete text-primary-cream py-4 text-center uppercase tracking-widest font-bold text-sm hover:bg-primary-cream hover:text-primary-obsidian transition-colors"
+                    >
+                      Try again
+                    </button>
+                    <p
+                      role="alert"
+                      className="mt-3 text-xs uppercase tracking-widest text-ui-concrete text-center"
+                    >
+                      Your bag may have changed — please refresh the page.
+                    </p>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={redirectToCheckout}
+                    disabled={checkoutStatus === 'redirecting'}
+                    className="block w-full bg-primary-cream text-primary-obsidian py-4 text-center uppercase tracking-widest font-bold hover:bg-white transition-colors disabled:opacity-60"
+                  >
+                    {checkoutStatus === 'redirecting' ? 'Redirecting to checkout…' : 'Proceed to checkout'}
+                  </button>
+                )}
+
                 <Link
                   href="/cart"
                   onClick={closeCart}

@@ -5,6 +5,7 @@ import { useCart } from '@/store/use-cart';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { formatCurrency } from '@/lib/utils';
 import { CartLineItem } from '@/components/CartLineItem';
+import { useCheckoutRedirect } from '@/hooks/use-checkout-redirect';
 
 // ---------------------------------------------------------------------------
 // CartView — the client island for the /cart page.
@@ -18,10 +19,11 @@ import { CartLineItem } from '@/components/CartLineItem';
 //
 // Empty state points shoppers back to the collection so /cart is never a dead
 // end. Populated state reuses CartLineItem (shared with the drawer) for the
-// line rows, shows the merchandise subtotal, and hands off to /checkout (the
-// Shopify hosted-checkout redirect). The "Estimated total" wording matches
-// the checkout page: shipping and tax are computed at Shopify's checkout after
-// the buyer enters an address, never on this page.
+// line rows, shows the merchandise subtotal, and hands off DIRECTLY to
+// Shopify's hosted checkout via the shared useCheckoutRedirect hook (no
+// intermediate /checkout page). The "Estimated total" wording reflects that
+// shipping and tax are computed at Shopify's checkout after the buyer enters
+// an address, never on this page.
 // ---------------------------------------------------------------------------
 
 export function CartView() {
@@ -38,6 +40,8 @@ export function CartView() {
     removeItem,
   } = useCart();
   const hydrated = useHydrated();
+  const { status: checkoutStatus, redirect: redirectToCheckout, reset: resetCheckout } =
+    useCheckoutRedirect();
 
   // Pre-hydration baseline: render zero so SSR and the first client paint
   // agree. Once hydrated, the store reflects the Shopify cart (rehydrated by
@@ -124,12 +128,32 @@ export function CartView() {
             </p>
           ) : null}
 
-          <Link
-            href="/checkout"
-            className="mt-6 block w-full bg-primary-cream text-primary-obsidian py-4 text-center uppercase tracking-widest font-bold hover:bg-white transition-colors"
-          >
-            Proceed to checkout
-          </Link>
+          {checkoutStatus === 'error' ? (
+            <div className="mt-6 w-full">
+              <button
+                type="button"
+                onClick={resetCheckout}
+                className="block w-full border border-ui-concrete text-primary-cream py-4 text-center uppercase tracking-widest font-bold text-sm hover:bg-primary-cream hover:text-primary-obsidian transition-colors"
+              >
+                Try again
+              </button>
+              <p
+                role="alert"
+                className="mt-3 text-xs uppercase tracking-widest text-ui-concrete text-center"
+              >
+                Your bag may have changed — please refresh the page.
+              </p>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={redirectToCheckout}
+              disabled={checkoutStatus === 'redirecting'}
+              className="mt-6 block w-full bg-primary-cream text-primary-obsidian py-4 text-center uppercase tracking-widest font-bold hover:bg-white transition-colors disabled:opacity-60"
+            >
+              {checkoutStatus === 'redirecting' ? 'Redirecting to checkout…' : 'Proceed to checkout'}
+            </button>
+          )}
 
           <Link
             href="/collection"
