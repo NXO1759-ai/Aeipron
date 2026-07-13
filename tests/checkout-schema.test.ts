@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { checkoutContactSchema, toShopifyAddress } from '@/lib/checkout-schema';
-import { COUNTRIES, addressRulesFor, isValidCountryCode } from '@/lib/countries';
+import { COUNTRIES, addressRulesFor, isValidCountryCode, subdivisionsFor, SUBDIVISIONS } from '@/lib/countries';
 
 // ---------------------------------------------------------------------------
 // Checkout zod schema — pure validation tests (no DOM needed).
@@ -119,11 +119,16 @@ describe('checkoutContactSchema — US rules', () => {
     expect(issuePaths(payload({ province: '' }))).toContain('province');
   });
 
-  it('requires a 2-letter state code', () => {
+  it('rejects a full state name (the buyer must pick from the list, which sends the code)', () => {
+    // The form renders a <select> for US states, so the browser sends a code.
+    // A crafted/tampered value like the full name "Pennsylvania" must be rejected
+    // server-side (never trust the client) — only a known 2-letter code is valid.
+    expect(issuePaths(payload({ province: 'Pennsylvania' }))).toContain('province');
     expect(issuePaths(payload({ province: 'Illinois' }))).toContain('province');
   });
 
-  it('accepts a 2-letter state code', () => {
+  it('accepts a valid 2-letter state code', () => {
+    expect(checkoutContactSchema.safeParse(payload({ province: 'PA' })).success).toBe(true);
     expect(checkoutContactSchema.safeParse(payload({ province: 'NY' })).success).toBe(true);
   });
 
@@ -277,5 +282,36 @@ describe('countries — data integrity', () => {
 
   it('addressRulesFor returns the default for an unmapped country', () => {
     expect(addressRulesFor('XX').requiresProvince).toBe(false);
+  });
+});
+
+describe('countries — subdivision lists (state/province <select> data)', () => {
+  it('has lists for US, CA, AU, BR (the rigid-code countries)', () => {
+    expect(SUBDIVISIONS.US.length).toBeGreaterThan(50); // 50 states + DC
+    expect(SUBDIVISIONS.CA.length).toBe(13);
+    expect(SUBDIVISIONS.AU.length).toBe(8);
+    expect(SUBDIVISIONS.BR.length).toBe(27);
+  });
+
+  it('every subdivision has a non-empty code + name', () => {
+    for (const list of Object.values(SUBDIVISIONS)) {
+      for (const s of list) {
+        expect(s.code.length).toBeGreaterThan(0);
+        expect(s.name.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('US list includes the codes used in the fixtures/tests (IL, NY, PA) as 2-letter codes', () => {
+    const codes = SUBDIVISIONS.US.map((s) => s.code);
+    for (const c of ['IL', 'NY', 'PA']) {
+      expect(codes).toContain(c);
+    }
+    expect(codes).not.toContain('Pennsylvania'); // full names are display-only
+  });
+
+  it('subdivisionsFor returns the list for a known country and undefined otherwise', () => {
+    expect(subdivisionsFor('US')).toBeDefined();
+    expect(subdivisionsFor('ZZ')).toBeUndefined();
   });
 });

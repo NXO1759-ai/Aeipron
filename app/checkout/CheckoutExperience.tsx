@@ -10,7 +10,7 @@ import {
   type CheckoutContact,
   COUNTRIES,
 } from '@/lib/checkout-schema';
-import { addressRulesFor } from '@/lib/countries';
+import { addressRulesFor, subdivisionsFor } from '@/lib/countries';
 import {
   updateCheckoutContact,
   selectDeliveryOption,
@@ -96,6 +96,11 @@ export function CheckoutExperience({ cart }: CheckoutExperienceProps) {
   // so the province/zip labels follow the selected country.
   const country = useWatch({ control, name: 'country' }) || '';
   const rules = addressRulesFor(country);
+  // When the country has a known subdivision list (US/CA/AU/BR), render a
+  // <select> so the buyer picks a real subdivision by full name and we send the
+  // code as provinceCode — instead of a free-text field whose rigid 2-letter
+  // pattern rejected the full names buyers naturally type ("Pennsylvania").
+  const subdivisions = subdivisionsFor(country);
 
   // --- Rehydrate: if the buyer returns to /checkout with an address + shipping
   //     option already on the cart, jump straight to the shipping phase. The
@@ -289,7 +294,20 @@ export function CheckoutExperience({ cart }: CheckoutExperienceProps) {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
                 <div className="sm:col-span-1">
                   <Field label={rules.provinceLabel} name="province" error={errors.province?.message} required={rules.requiresProvince} hint={rules.requiresProvince ? undefined : 'Optional'}>
-                    {(aria) => <Input type="text" autoComplete="address-level1" {...aria} {...register('province')} />}
+                    {(aria) =>
+                      subdivisions ? (
+                        <Select {...aria} {...register('province')}>
+                          <option value="">Select…</option>
+                          {subdivisions.map((s) => (
+                            <option key={s.code} value={s.code}>
+                              {s.name}
+                            </option>
+                          ))}
+                        </Select>
+                      ) : (
+                        <Input type="text" autoComplete="address-level1" {...aria} {...register('province')} />
+                      )
+                    }
                   </Field>
                 </div>
                 <div className="sm:col-span-1">

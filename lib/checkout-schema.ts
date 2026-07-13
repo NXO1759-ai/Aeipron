@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { addressRulesFor, isValidCountryCode, COUNTRIES } from '@/lib/countries';
+import { addressRulesFor, isValidCountryCode, subdivisionsFor, COUNTRIES } from '@/lib/countries';
 
 // ---------------------------------------------------------------------------
 // Checkout contact + address form schema (zod 4).
@@ -54,20 +54,25 @@ export const checkoutContactSchema = z
 
     const rules = addressRulesFor(data.country);
 
-    // Province / subdivision.
+    // Province / subdivision. When a known subdivision list exists for this
+    // country (US/CA/AU/BR), the form renders a <select> of those codes, so a
+    // tampered/typed value should be rejected against the known list (never
+    // trust the client). Countries with no list (JP/CN/IN/MX, or any
+    // requiresProvince country we have not enumerated) accept free text —
+    // Shopify validates the provinceCode server-side.
     if (rules.requiresProvince && !data.province) {
       ctx.addIssue({
         code: 'custom',
         path: ['province'],
         message: `${rules.provinceLabel} is required`,
       });
-    } else if (rules.provincePattern && data.province) {
-      const re = new RegExp(rules.provincePattern);
-      if (!re.test(data.province)) {
+    } else if (data.province) {
+      const subs = subdivisionsFor(data.country);
+      if (subs && !subs.some((s) => s.code === data.province)) {
         ctx.addIssue({
           code: 'custom',
           path: ['province'],
-          message: `Enter a valid ${rules.provinceLabel.toLowerCase()}`,
+          message: `Select a valid ${rules.provinceLabel.toLowerCase()}`,
         });
       }
     }
