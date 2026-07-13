@@ -50,6 +50,18 @@ describe('GraphQL queries — required fields present', () => {
     expect(PRODUCT_BY_HANDLE_QUERY).toContain('featuredImage');
   });
 
+  it('PRODUCT_BY_HANDLE_QUERY selects the variant image (gallery switches with variant)', () => {
+    // The variant image lives inside the variants.nodes selection of the
+    // shared ProductFields fragment (used by both the detail + collection
+    // queries). Assert it is selected so the gallery can follow the variant.
+    expect(PRODUCT_BY_HANDLE_QUERY).toContain('image {');
+    expect(PRODUCT_BY_HANDLE_QUERY).toMatch(/variants\(first: 50\)[\s\S]*image \{/);
+  });
+
+  it('COLLECTION_BY_HANDLE_QUERY also selects the variant image (shared fragment)', () => {
+    expect(COLLECTION_BY_HANDLE_QUERY).toContain('image {');
+  });
+
   it('COLLECTION_LIST_QUERY contains collections (list query)', () => {
     expect(COLLECTION_LIST_QUERY).toContain('collections');
   });

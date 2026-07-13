@@ -13,6 +13,11 @@ export interface ProductOptionValue {
   inStock: boolean;
   price: number;
   variantId: string; // Shopify ProductVariant GID — needed by the cart (Phase 2)
+  // The variant's own image URL, falling back to the product's featuredImage
+  // when the variant has none. Drives the product-gallery image switch: the
+  // active image follows the selected variant (like the price). '' when
+  // neither the variant nor the product has an image (never an empty <img src>).
+  image: string;
 }
 
 /**

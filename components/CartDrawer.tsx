@@ -1,12 +1,12 @@
 'use client';
 
-import { useCart, MAX_QTY_PER_LINE } from '@/store/use-cart';
+import { useCart } from '@/store/use-cart';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { formatCurrency } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Minus, Plus, Trash2 } from 'lucide-react';
-import Image from 'next/image';
+import { X } from 'lucide-react';
 import Link from 'next/link';
+import { CartLineItem } from '@/components/CartLineItem';
 
 export function CartDrawer() {
   const {
@@ -80,58 +80,15 @@ export function CartDrawer() {
                   </button>
                 </div>
               ) : (
-                lines.map((item) => {
-                  const atMax = item.quantity >= MAX_QTY_PER_LINE;
-                  return (
-                    <div key={item.lineId} className="flex gap-4">
-                      <div className="relative h-24 w-20 flex-shrink-0 bg-primary-cream overflow-hidden">
-                        {item.image ? (
-                          <Image src={item.image} alt={item.name} fill className="object-cover" />
-                        ) : null}
-                      </div>
-                      <div className="flex flex-1 flex-col justify-between">
-                        <div>
-                          <div className="flex justify-between">
-                            <h3 className="text-primary-cream uppercase tracking-wider font-bold text-sm">{item.name}</h3>
-                            <p className="text-primary-cream font-mono">{formatCurrency(item.price, currencyCode)}</p>
-                          </div>
-                          <p className="text-ui-concrete text-sm mt-1">Size: {item.size}</p>
-                        </div>
-                        <div className="flex justify-between items-center mt-4">
-                          {/* Quantity stepper */}
-                          <div className="flex items-center gap-3 border border-ui-concrete/30 px-2 py-1">
-                            <button
-                              onClick={() => setQuantity(item.lineId, item.quantity - 1)}
-                              aria-label={`Decrease quantity of ${item.name}`}
-                              className="text-ui-concrete hover:text-primary-cream transition-colors"
-                            >
-                              <Minus className="h-4 w-4" />
-                            </button>
-                            <span className="text-primary-cream text-sm w-5 text-center tabular-nums" aria-live="polite">
-                              {item.quantity}
-                            </span>
-                            <button
-                              onClick={() => setQuantity(item.lineId, item.quantity + 1)}
-                              disabled={atMax}
-                              aria-label={`Increase quantity of ${item.name}${atMax ? ' (maximum reached)' : ''}`}
-                              className="text-ui-concrete hover:text-primary-cream transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            >
-                              <Plus className="h-4 w-4" />
-                            </button>
-                          </div>
-                          <button
-                            onClick={() => removeItem(item.lineId)}
-                            aria-label={`Remove ${item.name} from bag`}
-                            className="flex items-center gap-1 text-ui-concrete hover:text-accent-energy transition-colors text-xs uppercase tracking-widest"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
+                lines.map((item) => (
+                  <CartLineItem
+                    key={item.lineId}
+                    item={item}
+                    currencyCode={currencyCode}
+                    onSetQuantity={setQuantity}
+                    onRemove={removeItem}
+                  />
+                ))
               )}
             </div>
 
@@ -153,6 +110,13 @@ export function CartDrawer() {
                   className="block w-full bg-primary-cream text-primary-obsidian py-4 text-center uppercase tracking-widest font-bold hover:bg-white transition-colors"
                 >
                   Proceed to checkout
+                </Link>
+                <Link
+                  href="/cart"
+                  onClick={closeCart}
+                  className="block w-full mt-3 py-3 text-center uppercase tracking-widest text-xs font-bold text-ui-concrete hover:text-primary-cream border border-ui-concrete/30 hover:border-primary-cream transition-colors"
+                >
+                  View full bag
                 </Link>
               </div>
             )}

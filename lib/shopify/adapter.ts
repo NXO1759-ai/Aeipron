@@ -49,7 +49,7 @@ export function mapProduct(node: ShopifyProductNode): Product {
     priceMax: Number(node.priceRange.maxVariantPrice.amount),
     description: node.description,
     images: mapImages(node),
-    options: mapOptions(node.variants.nodes),
+    options: mapOptions(node.variants.nodes, node.featuredImage?.url),
   };
 }
 
@@ -106,7 +106,7 @@ function mapImages(node: ShopifyProductNode): string[] {
  *
  * Groups and values are returned in first-seen order — do not sort.
  */
-function mapOptions(variants: ShopifyProductVariant[]): ProductOption[] {
+function mapOptions(variants: ShopifyProductVariant[], featuredImageUrl?: string): ProductOption[] {
   // name → { values: Map<value, {inStock, price}> } preserving insertion order.
   const groups = new Map<string, Map<string, ProductOptionValue>>();
 
@@ -118,6 +118,11 @@ function mapOptions(variants: ShopifyProductVariant[]): ProductOption[] {
         groups.set(opt.name, valueMap);
       }
       const variantPrice = Number(variant.price.amount);
+      // Variant image falls back to the product's featuredImage so every option
+      // value has a usable image even when the variant has none. '' only when
+      // the product itself has no featuredImage — the gallery then falls back
+      // to product.images[0].
+      const variantImage = variant.image?.url ?? featuredImageUrl ?? '';
       const existing = valueMap.get(opt.value);
       if (!existing) {
         valueMap.set(opt.value, {
@@ -125,6 +130,7 @@ function mapOptions(variants: ShopifyProductVariant[]): ProductOption[] {
           inStock: variant.availableForSale,
           price: variantPrice,
           variantId: variant.id,
+          image: variantImage,
         });
       } else {
         // Aggregate across variants sharing this (name, value).
@@ -132,6 +138,7 @@ function mapOptions(variants: ShopifyProductVariant[]): ProductOption[] {
         if (variantPrice < existing.price) {
           existing.price = variantPrice;
           existing.variantId = variant.id;
+          existing.image = variantImage;
         }
       }
     }

@@ -28,7 +28,7 @@ import 'server-only';
  *   handle        — SEO-friendly slug used in the /product/[slug] route
  *   title         — product display name
  *   featuredImage — primary image for collection cards
- *   variants      — size/option matrix with availability + pricing
+ *   variants      — size/option matrix with availability + pricing + image
  *   priceRange    — min/max variant prices for display
  *
  * Deliberately does NOT select:
@@ -57,6 +57,13 @@ const PRODUCT_FRAGMENT = `#graphql
         price {
           amount
           currencyCode
+        }
+        # Variant's own image (nullable). Drives the product-gallery image
+        # switch: when a buyer selects a variant, the gallery shows this image,
+        # falling back to the product's featuredImage when null.
+        image {
+          url
+          altText
         }
       }
     }

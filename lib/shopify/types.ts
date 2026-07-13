@@ -33,6 +33,11 @@ export interface ShopifyProductVariant {
   availableForSale: boolean;
   selectedOptions: ShopifySelectedOption[];
   price: ShopifyMoneyV2;
+  // The variant's own image (nullable — many variants inherit the product's
+  // featuredImage). Selected in PRODUCT_FRAGMENT so the product gallery can
+  // switch images with the selected variant. Always present in the query
+  // response (possibly null); typed nullable for accuracy.
+  image: ShopifyImage | null;
 }
 
 /** Min/max price range across all variants of a product. */

@@ -155,6 +155,45 @@ describe('mapProduct', () => {
       expect(large?.price).toBe(30);
     });
   });
+
+  describe('variant image mapping', () => {
+    it('maps the variant image url to ProductOptionValue.image', () => {
+      const product = mapProduct(colorProductNode);
+      const red = product.options[0].values.find((v) => v.value === 'Red');
+      const black = product.options[0].values.find((v) => v.value === 'Black');
+      expect(red?.image).toBe('https://cdn.shopify.com/s/files/1/0792/2286/6117/files/red.jpg');
+      expect(black?.image).toBe('https://cdn.shopify.com/s/files/1/0792/2286/6117/files/black.jpg');
+    });
+
+    it('falls back to the product featuredImage when the variant has no image', () => {
+      // The White variant has image: null — it should inherit the product's
+      // featuredImage so the gallery always has something to show.
+      const product = mapProduct(colorProductNode);
+      const white = product.options[0].values.find((v) => v.value === 'White');
+      expect(white?.image).toBe(colorProductNode.featuredImage!.url);
+    });
+
+    it('falls back to the product featuredImage for size variants with no image', () => {
+      // shirtsProductNode variants all have image: null → featuredImage fallback.
+      const product = mapProduct(shirtsProductNode);
+      for (const v of product.options[0].values) {
+        expect(v.image).toBe(shirtsProductNode.featuredImage!.url);
+      }
+    });
+
+    it('returns empty string when neither the variant nor the product has an image', () => {
+      const node = { ...shirtsProductNode, featuredImage: null };
+      const product = mapProduct(node);
+      expect(product.options[0].values[0].image).toBe('');
+    });
+
+    it('keeps each variant image distinct per option value', () => {
+      const product = mapProduct(colorProductNode);
+      const red = product.options[0].values.find((v) => v.value === 'Red');
+      const black = product.options[0].values.find((v) => v.value === 'Black');
+      expect(red?.image).not.toBe(black?.image);
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
