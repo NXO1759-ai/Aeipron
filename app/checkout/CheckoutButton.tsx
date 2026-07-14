@@ -1,48 +1,32 @@
 'use client';
 
-import { useState } from 'react';
-import { getCheckoutUrl } from '@/app/cart/actions';
+import { useCheckoutRedirect } from '@/hooks/use-checkout-redirect';
 
 // ---------------------------------------------------------------------------
-// CheckoutButton — the only interactive piece of the (otherwise server-rendered)
-// checkout page. On click it fetches the Shopify hosted-checkout URL via the
-// `getCheckoutUrl` server action and redirects the browser there. Shopify's
-// hosted checkout collects shipping + payment and computes the final total —
-// we never run a custom checkout form.
+// CheckoutButton — the interactive piece of the (otherwise server-rendered)
+// /checkout page. Delegates to the shared useCheckoutRedirect hook so its
+// idle/redirecting/error behavior stays identical to the cart drawer's and the
+// /cart page's "Proceed to checkout" buttons.
 //
-// Edge cases:
-//   - No URL (cart expired between render and click) → show a "refresh" message
-//     instead of silently doing nothing.
-//   - Action throws (network/Shopify error) → show a retry message.
+// NOTE: the active checkout flow no longer routes through /checkout — the cart
+// drawer and the /cart page redirect DIRECTLY to Shopify's hosted checkout via
+// the same hook. This page (and this button) are kept dormant, reachable only
+// by direct URL, so the custom-checkout code (CheckoutExperience.tsx + its
+// actions) can be re-wired here later with no extra effort. To re-enable the
+// intermediate review page as a flow step, link "Proceed to checkout" back to
+// /checkout in CartDrawer.tsx / CartView.tsx.
 // ---------------------------------------------------------------------------
 
 export function CheckoutButton() {
-  const [status, setStatus] = useState<'idle' | 'redirecting' | 'error'>('idle');
-
-  const handleClick = async () => {
-    setStatus('redirecting');
-    try {
-      const url = await getCheckoutUrl();
-      if (url) {
-        // Hand off to Shopify's hosted checkout. A full page navigation —
-        // the SPA stays out of the payment flow entirely.
-        window.location.href = url;
-        return;
-      }
-      // The cart disappeared (expired / cleared) since the page rendered.
-      setStatus('error');
-    } catch {
-      setStatus('error');
-    }
-  };
+  const { status, redirect, reset } = useCheckoutRedirect();
 
   if (status === 'error') {
     return (
       <div className="w-full">
         <button
           type="button"
-          onClick={() => setStatus('idle')}
-          className="w-full border border-primary-obsidian text-primary-obsidian py-4 uppercase tracking-widest font-bold text-sm hover:bg-primary-obsidian hover:text-white transition-colors"
+          onClick={reset}
+          className="w-full border border-ui-concrete text-primary-cream py-5 uppercase tracking-widest font-bold text-sm hover:bg-primary-cream hover:text-primary-obsidian transition-colors"
         >
           Try again
         </button>
@@ -56,7 +40,7 @@ export function CheckoutButton() {
   return (
     <button
       type="button"
-      onClick={handleClick}
+      onClick={redirect}
       disabled={status === 'redirecting'}
       className="w-full bg-accent-energy text-primary-cream py-6 uppercase tracking-widest font-bold hover:bg-accent-energy/90 transition-colors disabled:opacity-60"
     >

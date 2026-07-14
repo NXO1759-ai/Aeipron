@@ -1,12 +1,13 @@
 'use client';
 
-import { useCart, MAX_QTY_PER_LINE } from '@/store/use-cart';
+import { useCart } from '@/store/use-cart';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { formatCurrency } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Minus, Plus, Trash2 } from 'lucide-react';
-import Image from 'next/image';
+import { X } from 'lucide-react';
 import Link from 'next/link';
+import { CartLineItem } from '@/components/CartLineItem';
+import { useCheckoutRedirect } from '@/hooks/use-checkout-redirect';
 
 export function CartDrawer() {
   const {
@@ -22,6 +23,8 @@ export function CartDrawer() {
     removeItem,
   } = useCart();
   const hydrated = useHydrated();
+  const { status: checkoutStatus, redirect: redirectToCheckout, reset: resetCheckout } =
+    useCheckoutRedirect();
 
   // Before hydration, render the empty/zero baseline so SSR and client agree.
   const count = hydrated ? totalQuantity : 0;
@@ -80,58 +83,15 @@ export function CartDrawer() {
                   </button>
                 </div>
               ) : (
-                lines.map((item) => {
-                  const atMax = item.quantity >= MAX_QTY_PER_LINE;
-                  return (
-                    <div key={item.lineId} className="flex gap-4">
-                      <div className="relative h-24 w-20 flex-shrink-0 bg-primary-cream overflow-hidden">
-                        {item.image ? (
-                          <Image src={item.image} alt={item.name} fill className="object-cover" />
-                        ) : null}
-                      </div>
-                      <div className="flex flex-1 flex-col justify-between">
-                        <div>
-                          <div className="flex justify-between">
-                            <h3 className="text-primary-cream uppercase tracking-wider font-bold text-sm">{item.name}</h3>
-                            <p className="text-primary-cream font-mono">{formatCurrency(item.price, currencyCode)}</p>
-                          </div>
-                          <p className="text-ui-concrete text-sm mt-1">Size: {item.size}</p>
-                        </div>
-                        <div className="flex justify-between items-center mt-4">
-                          {/* Quantity stepper */}
-                          <div className="flex items-center gap-3 border border-ui-concrete/30 px-2 py-1">
-                            <button
-                              onClick={() => setQuantity(item.lineId, item.quantity - 1)}
-                              aria-label={`Decrease quantity of ${item.name}`}
-                              className="text-ui-concrete hover:text-primary-cream transition-colors"
-                            >
-                              <Minus className="h-4 w-4" />
-                            </button>
-                            <span className="text-primary-cream text-sm w-5 text-center tabular-nums" aria-live="polite">
-                              {item.quantity}
-                            </span>
-                            <button
-                              onClick={() => setQuantity(item.lineId, item.quantity + 1)}
-                              disabled={atMax}
-                              aria-label={`Increase quantity of ${item.name}${atMax ? ' (maximum reached)' : ''}`}
-                              className="text-ui-concrete hover:text-primary-cream transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            >
-                              <Plus className="h-4 w-4" />
-                            </button>
-                          </div>
-                          <button
-                            onClick={() => removeItem(item.lineId)}
-                            aria-label={`Remove ${item.name} from bag`}
-                            className="flex items-center gap-1 text-ui-concrete hover:text-accent-energy transition-colors text-xs uppercase tracking-widest"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
+                lines.map((item) => (
+                  <CartLineItem
+                    key={item.lineId}
+                    item={item}
+                    currencyCode={currencyCode}
+                    onSetQuantity={setQuantity}
+                    onRemove={removeItem}
+                  />
+                ))
               )}
             </div>
 
@@ -147,12 +107,40 @@ export function CartDrawer() {
                   <span>Subtotal</span>
                   <span className="font-mono">{subtotal}</span>
                 </div>
+
+                {checkoutStatus === 'error' ? (
+                  <div className="w-full">
+                    <button
+                      type="button"
+                      onClick={resetCheckout}
+                      className="block w-full border border-ui-concrete text-primary-cream py-4 text-center uppercase tracking-widest font-bold text-sm hover:bg-primary-cream hover:text-primary-obsidian transition-colors"
+                    >
+                      Try again
+                    </button>
+                    <p
+                      role="alert"
+                      className="mt-3 text-xs uppercase tracking-widest text-ui-concrete text-center"
+                    >
+                      Your bag may have changed — please refresh the page.
+                    </p>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={redirectToCheckout}
+                    disabled={checkoutStatus === 'redirecting'}
+                    className="block w-full bg-primary-cream text-primary-obsidian py-4 text-center uppercase tracking-widest font-bold hover:bg-white transition-colors disabled:opacity-60"
+                  >
+                    {checkoutStatus === 'redirecting' ? 'Redirecting to checkout…' : 'Proceed to checkout'}
+                  </button>
+                )}
+
                 <Link
-                  href="/checkout"
+                  href="/cart"
                   onClick={closeCart}
-                  className="block w-full bg-primary-cream text-primary-obsidian py-4 text-center uppercase tracking-widest font-bold hover:bg-white transition-colors"
+                  className="block w-full mt-3 py-3 text-center uppercase tracking-widest text-xs font-bold text-ui-concrete hover:text-primary-cream border border-ui-concrete/30 hover:border-primary-cream transition-colors"
                 >
-                  Proceed to checkout
+                  View full bag
                 </Link>
               </div>
             )}

@@ -4,7 +4,7 @@ import type { Product, ProductOptionValue } from '@/lib/types';
 
 /** Build a domain Product from a compact option spec for resolver tests. */
 function makeProduct(
-  options: Array<{ name: string; values: Array<{ value: string; inStock: boolean; price: number; variantId: string }> }>,
+  options: Array<{ name: string; values: Array<{ value: string; inStock: boolean; price: number; variantId: string; image?: string }> }>,
   base: Partial<Product> = {},
 ): Product {
   return {
@@ -22,6 +22,7 @@ function makeProduct(
         inStock: v.inStock,
         price: v.price,
         variantId: v.variantId,
+        image: v.image ?? '',
       })),
     })),
   };
@@ -99,6 +100,32 @@ describe('resolveSelectedVariant', () => {
     expect((m as ProductOptionValue).price).toBe(110);
     expect((l as ProductOptionValue).price).toBe(120);
     // When nothing is selected, no price is resolved (the UI falls back to the range).
+    expect(resolveSelectedVariant(product, {})).toBeNull();
+  });
+
+  it('exposes the selected variant image so the gallery can switch with the selection', () => {
+    // Each variant carries its own image — the gallery must show the selected
+    // variant's image, falling back to the product image when none is set.
+    const product = makeProduct([
+      {
+        name: 'Color',
+        values: [
+          { value: 'Red', inStock: true, price: 50, variantId: 'gid/Red', image: 'https://cdn.shopify.com/red.jpg' },
+          { value: 'Black', inStock: true, price: 50, variantId: 'gid/Black', image: 'https://cdn.shopify.com/black.jpg' },
+          { value: 'White', inStock: true, price: 50, variantId: 'gid/White', image: '' },
+        ],
+      },
+    ]);
+
+    expect((resolveSelectedVariant(product, { Color: 'Red' }) as ProductOptionValue).image).toBe(
+      'https://cdn.shopify.com/red.jpg',
+    );
+    expect((resolveSelectedVariant(product, { Color: 'Black' }) as ProductOptionValue).image).toBe(
+      'https://cdn.shopify.com/black.jpg',
+    );
+    // A variant with no image resolves to '' — the gallery falls back to product.images[0].
+    expect((resolveSelectedVariant(product, { Color: 'White' }) as ProductOptionValue).image).toBe('');
+    // Nothing selected → no resolved image (gallery shows the default).
     expect(resolveSelectedVariant(product, {})).toBeNull();
   });
 });

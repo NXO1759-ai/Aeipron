@@ -28,6 +28,9 @@ import type {
   CollectionSummary,
   Cart,
   CartLine,
+  DeliveryGroup,
+  DeliveryOption,
+  CheckoutDetails,
 } from '@/lib/types';
 import type {
   ShopifyProductNode,
@@ -36,6 +39,8 @@ import type {
   ShopifyCartNode,
   ShopifyCartLine,
   ShopifyCartMerchandiseVariant,
+  ShopifyCartDeliveryGroup,
+  ShopifyCartDeliveryOption,
 } from '@/lib/shopify/types';
 
 /**
@@ -49,7 +54,7 @@ export function mapProduct(node: ShopifyProductNode): Product {
     priceMax: Number(node.priceRange.maxVariantPrice.amount),
     description: node.description,
     images: mapImages(node),
-    options: mapOptions(node.variants.nodes),
+    options: mapOptions(node.variants.nodes, node.featuredImage?.url),
   };
 }
 
@@ -106,7 +111,7 @@ function mapImages(node: ShopifyProductNode): string[] {
  *
  * Groups and values are returned in first-seen order — do not sort.
  */
-function mapOptions(variants: ShopifyProductVariant[]): ProductOption[] {
+function mapOptions(variants: ShopifyProductVariant[], featuredImageUrl?: string): ProductOption[] {
   // name → { values: Map<value, {inStock, price}> } preserving insertion order.
   const groups = new Map<string, Map<string, ProductOptionValue>>();
 
@@ -118,6 +123,11 @@ function mapOptions(variants: ShopifyProductVariant[]): ProductOption[] {
         groups.set(opt.name, valueMap);
       }
       const variantPrice = Number(variant.price.amount);
+      // Variant image falls back to the product's featuredImage so every option
+      // value has a usable image even when the variant has none. '' only when
+      // the product itself has no featuredImage — the gallery then falls back
+      // to product.images[0].
+      const variantImage = variant.image?.url ?? featuredImageUrl ?? '';
       const existing = valueMap.get(opt.value);
       if (!existing) {
         valueMap.set(opt.value, {
@@ -125,6 +135,7 @@ function mapOptions(variants: ShopifyProductVariant[]): ProductOption[] {
           inStock: variant.availableForSale,
           price: variantPrice,
           variantId: variant.id,
+          image: variantImage,
         });
       } else {
         // Aggregate across variants sharing this (name, value).
@@ -132,6 +143,7 @@ function mapOptions(variants: ShopifyProductVariant[]): ProductOption[] {
         if (variantPrice < existing.price) {
           existing.price = variantPrice;
           existing.variantId = variant.id;
+          existing.image = variantImage;
         }
       }
     }
@@ -222,5 +234,69 @@ export function mapCart(node: ShopifyCartNode): Cart {
     totalAmountEstimated: node.cost.totalAmountEstimated,
     currencyCode: node.cost.totalAmount.currencyCode,
     lines: node.lines.edges.map((edge) => mapCartLine(edge.node)),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Cart delivery adapter (Phase 4b — custom checkout).
+//
+// Maps the cart's deliveryGroups connection to the domain DeliveryGroup /
+// DeliveryOption types. Called only by the checkout server actions, on cart
+// responses that selected the DeliveryGroupsFields fragment. The plain
+// CART_GET_QUERY / line-mutation responses do NOT select deliveryGroups, so
+// mapDeliveryGroups safely returns [] when `node.deliveryGroups` is absent.
+//
+// Money is parsed from the Shopify Decimal string → number at this boundary
+// (same convention as mapCart). `handle` is passed through verbatim — it is
+// the opaque string cartSelectedDeliveryOptionsUpdate expects back, and the
+// browser sends ONLY handle + deliveryGroupId (never a price).
+// ---------------------------------------------------------------------------
+
+/** Map a Shopify delivery option to the domain DeliveryOption. */
+function mapDeliveryOption(option: ShopifyCartDeliveryOption): DeliveryOption {
+  return {
+    handle: option.handle,
+    code: option.code,
+    title: option.title,
+    description: option.description,
+    cost: {
+      amount: Number(option.estimatedCost.amount),
+      currencyCode: option.estimatedCost.currencyCode,
+    },
+    deliveryMethodType: option.deliveryMethodType,
+  };
+}
+
+/** Map a Shopify delivery group to the domain DeliveryGroup. */
+function mapDeliveryGroup(group: ShopifyCartDeliveryGroup): DeliveryGroup {
+  return {
+    id: group.id,
+    deliveryOptions: group.deliveryOptions.map(mapDeliveryOption),
+    selectedHandle: group.selectedDeliveryOption?.handle ?? null,
+  };
+}
+
+/**
+ * Map the cart's delivery groups. Returns `[]` when `deliveryGroups` was not
+ * selected on the query (the plain cart get / line mutations) or when the cart
+ * has no delivery groups yet (address not set, or no shipping zone for the
+ * set country → Shopify returns an empty deliveryOptions list, not an error).
+ */
+export function mapDeliveryGroups(node: ShopifyCartNode): DeliveryGroup[] {
+  if (!node.deliveryGroups) return [];
+  return node.deliveryGroups.nodes.map(mapDeliveryGroup);
+}
+
+/**
+ * Map a Shopify cart node to the full CheckoutDetails (cart + delivery groups).
+ * Used by the checkout server actions so the /checkout page gets the order
+ * summary and the shipping-method choices in one return value. `cart` is the
+ * unchanged mapCart output; `deliveryGroups` is the new mapping (empty when the
+ * delivery fields were not selected or no address is set).
+ */
+export function mapCheckoutDetails(node: ShopifyCartNode): CheckoutDetails {
+  return {
+    cart: mapCart(node),
+    deliveryGroups: mapDeliveryGroups(node),
   };
 }
