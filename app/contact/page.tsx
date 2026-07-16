@@ -38,7 +38,7 @@ export default function ContactPage() {
     <div className="min-h-screen bg-apeiron-black text-apeiron-ivory">
       <div className="max-w-3xl mx-auto px-4 md:px-12 pt-10 md:pt-16 pb-24 md:pb-32">
         <header className="mb-12 md:mb-16">
-          <p className="text-xs uppercase tracking-widest text-ui-concrete mb-4">Support</p>
+          <p className="text-xs uppercase tracking-widest text-ui-concrete mb-4">
           <h1 className="font-inter text-4xl md:text-5xl font-medium uppercase tracking-tighter">
             Contact Us
           </h1>
