@@ -165,6 +165,29 @@ describe('mapProduct', () => {
       expect(black?.image).toBe('https://cdn.shopify.com/s/files/1/0792/2286/6117/files/black.jpg');
     });
 
+    it('passes the rich-text metafield value through verbatim (does not parse JSON)', () => {
+      // The adapter is a pure shape translation — it must NOT interpret the
+      // rich_text JSON; the client parses + renders it (components/RichText).
+      const product = mapProduct(colorProductNode);
+      expect(product.detailsFabrication).toBe(colorProductNode.detailsFabrication!.value);
+      expect(product.productCare).toBe(colorProductNode.productCare!.value);
+    });
+
+    it('maps a null metafield to undefined (section treated as absent)', () => {
+      const product = mapProduct(colorProductNode);
+      expect(product.productSizing).toBeUndefined();
+    });
+
+    it('maps absent metafields (collection-card nodes) to undefined', () => {
+      // shirtsProductNode has no metafield selections (mirrors the shared
+      // fragment used by collection cards) — the fields must be undefined,
+      // never throw.
+      const product = mapProduct(shirtsProductNode);
+      expect(product.detailsFabrication).toBeUndefined();
+      expect(product.productCare).toBeUndefined();
+      expect(product.productSizing).toBeUndefined();
+    });
+
     it('falls back to the product featuredImage when the variant has no image', () => {
       // The White variant has image: null — it should inherit the product's
       // featuredImage so the gallery always has something to show.

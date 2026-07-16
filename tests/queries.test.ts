@@ -121,6 +121,28 @@ describe('GraphQL queries — structural validity', () => {
     expect(PRODUCT_BY_HANDLE_QUERY).toContain('fragment ProductFields on Product');
   });
 
+  it('PRODUCT_BY_HANDLE_QUERY selects the custom product metafields (Rich Text)', () => {
+    // The three `custom` namespace metafields back the Details & Fabrication /
+    // Product Care / Product Sizing disclosures on the PDP. Selected via
+    // aliased `metafield(namespace:, key:)` so the response keys match the
+    // domain fields. (Collection cards use the shared fragment and do NOT
+    // select these — only the detail query pays for them.)
+    expect(PRODUCT_BY_HANDLE_QUERY).toContain('namespace: "custom", key: "details_fabrication"');
+    expect(PRODUCT_BY_HANDLE_QUERY).toContain('namespace: "custom", key: "product_care"');
+    expect(PRODUCT_BY_HANDLE_QUERY).toContain('namespace: "custom", key: "product_sizing"');
+    expect(PRODUCT_BY_HANDLE_QUERY).toContain('detailsFabrication: metafield(');
+    expect(PRODUCT_BY_HANDLE_QUERY).toContain('productCare: metafield(');
+    expect(PRODUCT_BY_HANDLE_QUERY).toContain('productSizing: metafield(');
+  });
+
+  it('COLLECTION_BY_HANDLE_QUERY does NOT select the product metafields (shared fragment only)', () => {
+    // Metafields are a detail-page concern; the collection grid must not pull
+    // them for every card.
+    expect(COLLECTION_BY_HANDLE_QUERY).not.toContain('details_fabrication');
+    expect(COLLECTION_BY_HANDLE_QUERY).not.toContain('product_care');
+    expect(COLLECTION_BY_HANDLE_QUERY).not.toContain('product_sizing');
+  });
+
   it('COLLECTION_BY_HANDLE_QUERY includes the ProductFields fragment', () => {
     expect(COLLECTION_BY_HANDLE_QUERY).toContain('...ProductFields');
     expect(COLLECTION_BY_HANDLE_QUERY).toContain('fragment ProductFields on Product');

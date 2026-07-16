@@ -55,6 +55,14 @@ export function mapProduct(node: ShopifyProductNode): Product {
     description: node.description,
     images: mapImages(node),
     options: mapOptions(node.variants.nodes, node.featuredImage?.url),
+    // Rich-text metafield values pass through verbatim as strings (undefined
+    // when absent). The Storefront API returns `rich_text` as a JSON string;
+    // the client parses + renders it (components/RichText) — the adapter does
+    // not interpret the JSON here, keeping the Shopify→domain seam a pure
+    // shape translation.
+    detailsFabrication: node.detailsFabrication?.value ?? undefined,
+    productCare: node.productCare?.value ?? undefined,
+    productSizing: node.productSizing?.value ?? undefined,
   };
 }
 

@@ -20,9 +20,12 @@ export function Header() {
   // `useHydrated` so the first client paint matches the server HTML (empty).
   const itemCount = hydrated ? totalQuantity : 0;
 
+  // Collaborators is intentionally absent from the nav list (per client
+  // direction). The /collaborators route + components are kept on disk for
+  // future reuse — only the nav entry is removed. Re-add the line below to
+  // surface it again: { label: "Collaborators", href: "/collaborators" },
   const navLinks = [
     { label: "Collection", href: "/collection" },
-    { label: "Collaborators", href: "/collaborators" },
     { label: "Our Story", href: "/story" },
   ];
 

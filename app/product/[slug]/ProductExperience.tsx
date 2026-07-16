@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { useCart } from '@/store/use-cart';
 import { resolveSelectedVariant } from '@/lib/product';
+import { RichText } from '@/components/RichText';
 import type { Product, ProductOption } from '@/lib/types';
 
 // ---------------------------------------------------------------------------
@@ -137,12 +138,16 @@ export function ProductExperience({ product }: { product: Product }) {
               <div key={group.name} className="mb-10">
                 <div className="mb-6 flex justify-between items-end">
                   <span className="uppercase tracking-widest text-sm font-bold">Select {group.name}</span>
+                  {/* Size Guide button — commented out per client direction.
+                      Kept here (not deleted) so it can be re-wired to a size
+                      chart later. Re-enable by uncommenting the JSX below.
                   <button
                     type="button"
                     className="text-ui-concrete hover:text-primary-cream underline-offset-4 hover:underline text-xs tracking-widest uppercase transition-all"
                   >
                     {group.name} Guide
                   </button>
+                  */}
                 </div>
 
                 <div className="flex flex-wrap gap-3">
@@ -191,26 +196,33 @@ export function ProductExperience({ product }: { product: Product }) {
               {selectedVariantId ? 'Add to bag' : 'Select an option'}
             </button>
 
-            {/* Additional Info — native disclosure widgets (keyboard + touch accessible).
-                Placeholder copy; replaced by Shopify metafields in a later phase. */}
+            {/* Additional Info — native disclosure widgets (keyboard + touch
+                accessible), driven by Shopify `rich_text` metafields. A section
+                renders only when its metafield has content (undefined when the
+                product doesn't have it set, or its definition isn't exposed to
+                the Storefront API). Shipping & Returns was removed per client
+                direction. The metafield value is a `rich_text` JSON string
+                rendered by <RichText> (NOT HTML — see components/RichText). */}
             <div className="mt-16 space-y-6 border-t border-ui-concrete/20 pt-8">
               {[
-                {
-                  title: 'Details & Fabrication',
-                  content: '100% Japanese Cotton. 450GSM loopback terry. High-density 3D ink back graphic. Made in Portugal.',
-                },
-                { title: 'Shipping & Returns', content: 'Complimentary express shipping on all orders over $200. 14-day return policy.' },
-              ].map((section, i) => (
-                <details key={i} className="border-b border-ui-concrete/20 pb-6 group">
-                  <summary className="uppercase tracking-widest font-bold text-sm cursor-pointer list-none flex items-center justify-between hover:text-accent-energy transition-colors">
-                    {section.title}
-                    <span className="text-ui-concrete transition-transform group-open:rotate-45" aria-hidden="true">
-                      +
-                    </span>
-                  </summary>
-                  <p className="text-sm text-ui-concrete mt-2">{section.content}</p>
-                </details>
-              ))}
+                { title: 'Details & Fabrication', value: product.detailsFabrication },
+                { title: 'Product Care', value: product.productCare },
+                { title: 'Product Sizing', value: product.productSizing },
+              ]
+                .filter((section) => section.value)
+                .map((section) => (
+                  <details key={section.title} className="border-b border-ui-concrete/20 pb-6 group">
+                    <summary className="uppercase tracking-widest font-bold text-sm cursor-pointer list-none flex items-center justify-between hover:text-accent-energy transition-colors">
+                      {section.title}
+                      <span className="text-ui-concrete transition-transform group-open:rotate-45" aria-hidden="true">
+                        +
+                      </span>
+                    </summary>
+                    <div className="text-sm text-ui-concrete mt-2 space-y-2">
+                      <RichText value={section.value} />
+                    </div>
+                  </details>
+                ))}
             </div>
           </div>
         </div>

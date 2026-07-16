@@ -63,6 +63,22 @@ export const colorProductNode: ShopifyProductNode = {
     url: 'https://cdn.shopify.com/s/files/1/0792/2286/6117/files/photo1.jpg',
     altText: null,
   },
+  // Rich-text metafields (JSON strings) — only present on the detail query.
+  // `productSizing` is null to exercise the null → undefined mapping; the
+  // other two carry a minimal rich-text root.
+  detailsFabrication: {
+    value: JSON.stringify({
+      type: 'root',
+      children: [{ type: 'paragraph', children: [{ type: 'text', value: '100% cotton.' }] }],
+    }),
+  },
+  productCare: {
+    value: JSON.stringify({
+      type: 'root',
+      children: [{ type: 'paragraph', children: [{ type: 'text', value: 'Machine wash cold.' }] }],
+    }),
+  },
+  productSizing: null,
   images: {
     nodes: [
       { url: 'https://cdn.shopify.com/s/files/1/0792/2286/6117/files/photo1.jpg', altText: null },

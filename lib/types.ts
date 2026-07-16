@@ -39,6 +39,14 @@ export interface Product {
   description: string;
   images: string[];
   options: ProductOption[];
+  // Custom product metafields (Rich Text) from the `custom` namespace. Each is
+  // the Storefront API `rich_text` value — a JSON STRING (a tree of typed
+  // nodes), NOT HTML — rendered by components/RichText. Undefined when the
+  // product doesn't have the metafield set or its definition isn't exposed to
+  // the Storefront API; the UI treats undefined as "section absent".
+  detailsFabrication?: string;
+  productCare?: string;
+  productSizing?: string;
 }
 
 export interface MerchItem {
