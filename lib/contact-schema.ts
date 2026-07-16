@@ -3,17 +3,18 @@ import { z } from 'zod';
 // ---------------------------------------------------------------------------
 // Contact-form schema (zod 4).
 //
-// Pure module — no DOM, no server-only imports — so it is unit-testable in the
-// Vitest `node` environment and importable from the 'use client' ContactForm.
+// Pure module — no DOM, no server-only imports — so it is unit-testable in
+// the Vitest `node` environment and importable from the 'use client' ContactForm.
 // The browser validates here for fast, field-level feedback; the server action
-// re-validates defensively in `app/contact/actions.ts` (never trust the
-// client) before POSTing to Shopify's contact endpoint.
+// re-validates defensively (never trust the client) before writing a
+// `contact_message` metaobject to Shopify via the Admin API
+// (see app/contact/actions.ts).
 //
-// The fields map onto Shopify's native contact form inputs:
-//   contact[name]  → name   (single line)
-//   contact[email] → email  (required by Shopify)
-//   contact[phone] → phone  (optional)
-//   contact[body]  → message (the message body Shopify emails to the store)
+// The fields map onto the metaobject definition the store must define:
+//   name   → contact_message.name   (single-line text, required)
+//   email  → contact_message.email  (single-line text, required)
+//   phone  → contact_message.phone  (single-line text, optional)
+//   body   → contact_message.body   (multi-line text, required)
 // ---------------------------------------------------------------------------
 
 /** Lenient phone pattern: optional +, then 0-20 of digits/spaces/dashes/parens/dots. */

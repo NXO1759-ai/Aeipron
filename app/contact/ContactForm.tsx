@@ -4,10 +4,13 @@
 // ContactForm — the /contact page's client island.
 //
 // A react-hook-form + zod form (name, email, optional phone, message). On
-// submit it calls the `submitContactMessage` server action, which POSTs
-// server-side to Shopify's native `/contact` endpoint (the same backend the
-// Liquid `{% form 'contact' %}` uses) — so the message is emailed to the
-// store and logged in Shopify admin, while the form stays in our headless UI.
+// submit it calls the `submitContactMessage` server action, which writes a
+// `contact_message` metaobject to Shopify via the Admin API (the storefront
+// `/contact` POST is blocked by Cloudflare + Shopify captcha for headless
+// submissions — see app/contact/actions.ts). The message therefore lands in
+// Shopify admin (and is emailed if the store has a Shopify Flow wired to the
+// metaobject), while the form stays in our headless UI with an in-page
+// success state.
 //
 // Reuses the dark-theme form primitives from components/form/Field.tsx (Field,
 // Input) so the contact form looks identical to the checkout form. TRUST

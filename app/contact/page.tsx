@@ -14,9 +14,12 @@ import { ContactForm } from './ContactForm';
 //
 // The ContactForm is a client island inside this static page: the page stays
 // prerendered + indexable, while the form submits via a server action that
-// POSTs server-side to Shopify's native `/contact` endpoint (the Storefront
-// API has no contact-form mutation). See app/contact/actions.ts for the
-// backend contract and the live-test caveat.
+// writes a `contact_message` metaobject to Shopify via the Admin API. The
+// storefront `/contact` POST endpoint is NOT used — it is protected by
+// Cloudflare bot management + Shopify storefront-form captcha, both of which
+// block headless submissions (see app/contact/actions.ts for the full
+// rationale). Submissions land in Shopify admin (and are emailed if the store
+// has a Shopify Flow wired to the metaobject).
 //
 // LAYOUT: top padding is owned by LayoutWrapper's <main className="pt-24">. We
 // add extra top breathing room (`pt-10 md:pt-16`) so the eyebrow is not glued to
@@ -102,8 +105,9 @@ export default function ContactPage() {
         </dl>
 
         {/* Contact form — a client island inside the static page. The server
-            action POSTs server-side to Shopify's native /contact endpoint, so
-            submissions are emailed to the store + logged in Shopify admin. */}
+            action writes a contact_message metaobject to Shopify via the Admin
+            API, so submissions land in Shopify admin (and are emailed if the
+            store has a Shopify Flow wired to the metaobject). */}
         <section className="mt-16 md:mt-24">
           <h2 className="text-lg font-bold uppercase tracking-widest text-primary-cream mb-8">
             Send us a message

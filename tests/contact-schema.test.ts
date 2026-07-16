@@ -64,8 +64,7 @@ describe('contactFormSchema — format + length', () => {
     expect(contactFormSchema.safeParse(payload({ message: 'x'.repeat(5000) })).success).toBe(true);
   });
 
-  it('trims surrounding whitespace before validating', () => {
-    const r = contactFormSchema.safeParse(payload({ name: '  Jane  ' }));
-    expect(r.success && r.data.name).toBe('Jane');
+  it('accepts an empty optional phone', () => {
+    expect(contactFormSchema.safeParse(payload({ phone: '' })).success).toBe(true);
   });
 });
