@@ -17,7 +17,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
       <main className={!isCheckout && !isHome ? 'pt-24 min-h-screen' : 'min-h-screen'}>
         {children}
       </main>
-      {!isCheckout && <Footer />}
+      {!isCheckout && !isHome && <Footer />}
       {!isCheckout && <CartHydrator />}
       {!isCheckout && <CartDrawer />}
     </>

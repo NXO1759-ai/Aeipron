@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { getContactContent } from '@/lib/content';
+import { ContactForm } from './ContactForm';
 
 // ---------------------------------------------------------------------------
 // /contact — the Contact Us page.
@@ -11,8 +12,15 @@ import { getContactContent } from '@/lib/content';
 // SHOULD be indexed (no robots:noindex). External links (socials) open in a new
 // tab, are safe-rel annotated, and announce that via aria-label.
 //
-// LAYOUT: top padding is owned by LayoutWrapper's <main className="pt-24">, so
-// this page adds bottom padding only (matching the /collection convention).
+// The ContactForm is a client island inside this static page: the page stays
+// prerendered + indexable, while the form submits via a server action that
+// POSTs server-side to Shopify's native `/contact` endpoint (the Storefront
+// API has no contact-form mutation). See app/contact/actions.ts for the
+// backend contract and the live-test caveat.
+//
+// LAYOUT: top padding is owned by LayoutWrapper's <main className="pt-24">. We
+// add extra top breathing room (`pt-10 md:pt-16`) so the eyebrow is not glued to
+// the fixed header, plus bottom padding matching the /collection convention.
 // ---------------------------------------------------------------------------
 
 export const metadata: Metadata = {
@@ -25,7 +33,7 @@ export default function ContactPage() {
 
   return (
     <div className="min-h-screen bg-apeiron-black text-apeiron-ivory">
-      <div className="max-w-3xl mx-auto px-4 md:px-12 pb-24 md:pb-32">
+      <div className="max-w-3xl mx-auto px-4 md:px-12 pt-10 md:pt-16 pb-24 md:pb-32">
         <header className="mb-12 md:mb-16">
           <p className="text-xs uppercase tracking-widest text-ui-concrete mb-4">Support</p>
           <h1 className="font-inter text-4xl md:text-5xl font-medium uppercase tracking-tighter">
@@ -92,6 +100,16 @@ export default function ContactPage() {
             </div>
           ) : null}
         </dl>
+
+        {/* Contact form — a client island inside the static page. The server
+            action POSTs server-side to Shopify's native /contact endpoint, so
+            submissions are emailed to the store + logged in Shopify admin. */}
+        <section className="mt-16 md:mt-24">
+          <h2 className="text-lg font-bold uppercase tracking-widest text-primary-cream mb-8">
+            Send us a message
+          </h2>
+          <ContactForm />
+        </section>
       </div>
     </div>
   );

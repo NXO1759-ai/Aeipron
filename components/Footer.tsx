@@ -1,21 +1,25 @@
 import Link from 'next/link';
+import { Instagram, Youtube, Mail } from 'lucide-react';
 import { getContactContent } from '@/lib/content';
+import { NewsletterForm } from './NewsletterForm';
 
 // ---------------------------------------------------------------------------
-// Footer — site-wide footer rendered on every page except /checkout (which is
-// dormant; LayoutWrapper suppresses it there).
+// Footer — redesigned site-wide footer (reference image).
 //
-// Two link columns — Shop (Collection, Our Story) and Support (Help/FAQ,
-// Contact Us) — plus the studio origin line (sourced from lib/content so it
-// stays in sync with the /contact page) and a copyright row.
+// Four columns on desktop:
+//   1. Brand block — Apeiron text lockup (matches Header), Japanese tagline,
+//      body copy, divider, shipping-from address, social icons.
+//   2. Shop links — Collection, Our Story (with arrows).
+//   3. Support links — Help / FAQ, Contact Us (with arrows).
+//   4. Stay in the Loop — newsletter copy + NewsletterForm email capture.
 //
-// COMPONENT BOUNDARY: this file has no 'use client' directive, but it is
-// imported by the 'use client' LayoutWrapper, so Next bundles it into the
-// client tree. That is safe ONLY because it uses next/link + static markup
-// with no server-only imports. Do NOT add a Shopify fetch or anything from
-// lib/shopify/* or lib/cart-cookie here — that would break the build. If the
-// footer ever needs server data, render it as a Server Component passed via
-// children, not imported into the client LayoutWrapper.
+// Bottom bar: copyright (left), Privacy Policy + Terms of Service (right).
+//
+// Boundaries: this file has no 'use client' directive, but it is imported by
+// the 'use client' LayoutWrapper, so Next bundles it into the client tree. It
+// therefore uses no server-only imports. Static data comes from lib/content
+// (already a sync getter today). If dynamic Shopify data is needed later,
+// render the footer as a Server Component passed via children, not imported here.
 // ---------------------------------------------------------------------------
 
 const shopLinks = [
@@ -28,61 +32,193 @@ const supportLinks = [
   { label: 'Contact Us', href: '/contact' },
 ];
 
-const linkColumns = [
-  { title: 'Shop', links: shopLinks },
-  { title: 'Support', links: supportLinks },
+const socials = [
+  { label: 'Instagram', href: 'https://instagram.com/apeiron', icon: Instagram },
+  { label: 'X', href: 'https://x.com/apeiron', icon: XIcon },
+  { label: 'YouTube', href: 'https://youtube.com/apeiron', icon: Youtube },
+  { label: 'Email', href: 'mailto:hello@apeiron.com', icon: Mail },
 ];
+
+// ---------------------------------------------------------------------------
+// Inline SVG for the X logo (Lucide does not ship a branded X icon).
+// ---------------------------------------------------------------------------
+function XIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  );
+}
+
+function ArrowLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="group inline-flex items-center gap-4 text-primary-cream uppercase tracking-widest text-xs font-bold hover:text-accent-energy transition-colors"
+    >
+      <span className="min-w-[7rem]">{children}</span>
+      <ArrowIcon className="w-4 h-4 text-primary-cream group-hover:text-accent-energy transition-colors" />
+    </Link>
+  );
+}
+
+function ArrowIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M5 12h14M12 5l7 7-7 7" />
+    </svg>
+  );
+}
 
 export function Footer() {
   const { address } = getContactContent();
   const year = new Date().getFullYear();
 
   return (
-    <footer className="bg-primary-obsidian px-4 sm:px-6 lg:px-8 py-16 border-t border-ui-concrete/20">
-      <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-10 sm:gap-8">
-        {/* Brand + origin */}
-        <div className="flex flex-col gap-3 text-center sm:text-left">
-          <span className="text-primary-cream font-bold uppercase tracking-[0.2em] text-lg">Apeiron</span>
-          <span className="text-ui-concrete uppercase tracking-widest text-xs font-bold">
-            Shipping from {address}
-          </span>
+    <footer className="bg-apeiron-black text-apeiron-ivory border-t border-ui-concrete/20">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 lg:gap-8">
+          {/* Brand block */}
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col items-start">
+              <Link href="/" className="group">
+                <h2 className="text-2xl font-bold uppercase tracking-[0.2em] text-apeiron-ivory leading-none">
+                  Apeiron
+                </h2>
+              </Link>
+              <span className="text-[10px] text-apeiron-ivory tracking-[0.3em] mt-1 leading-none font-medium">
+                アペイロン
+              </span>
+            </div>
+
+            <p className="text-ui-concrete text-xs leading-relaxed max-w-xs">
+              Tools and apparel designed to elevate your everyday. Built with
+              purpose, crafted to last.
+            </p>
+
+            <hr className="border-ui-concrete/20 w-full my-0" />
+
+            <div className="flex flex-col gap-3">
+              <address className="not-italic text-ui-concrete text-xs uppercase tracking-widest flex items-start gap-2">
+                <LocationIcon className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span>Shipping from {address}</span>
+              </address>
+
+              <ul className="flex items-center gap-4">
+                {socials.map(({ label, href, icon: Icon }) => (
+                  <li key={label}>
+                    <a
+                      href={href}
+                      target={href.startsWith('mailto') ? undefined : '_blank'}
+                      rel={href.startsWith('mailto') ? undefined : 'noopener noreferrer'}
+                      aria-label={`${label}${href.startsWith('mailto') ? '' : ' (opens in a new tab)'}`}
+                      className="text-ui-concrete hover:text-primary-cream transition-colors"
+                    >
+                      <Icon className="w-5 h-5" />
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {/* Shop */}
+          <nav aria-label="Shop" className="flex flex-col gap-4">
+            <h2 className="text-ui-concrete uppercase tracking-widest text-xs font-bold">
+              Shop
+            </h2>
+            <div className="flex flex-col gap-3">
+              {shopLinks.map((link) => (
+                <ArrowLink key={link.href} href={link.href}>{link.label}</ArrowLink>
+              ))}
+            </div>
+          </nav>
+
+          {/* Support */}
+          <nav aria-label="Support" className="flex flex-col gap-4">
+            <h2 className="text-ui-concrete uppercase tracking-widest text-xs font-bold">
+              Support
+            </h2>
+            <div className="flex flex-col gap-3">
+              {supportLinks.map((link) => (
+                <ArrowLink key={link.href} href={link.href}>{link.label}</ArrowLink>
+              ))}
+            </div>
+          </nav>
+
+          {/* Stay in the Loop */}
+          <div className="flex flex-col gap-4">
+            <h2 className="text-ui-concrete uppercase tracking-widest text-xs font-bold">
+              Stay in the Loop
+            </h2>
+            <p className="text-ui-concrete text-xs leading-relaxed">
+              Be the first to know about new drops, exclusive offers, and more.
+            </p>
+            <NewsletterForm />
+          </div>
         </div>
 
-        {/* Link columns */}
-        {linkColumns.map((column) => (
-          <nav
-            key={column.title}
-            aria-label={column.title}
-            className="flex flex-col gap-3 text-center sm:text-left"
+        {/* Bottom bar */}
+        <div className="mt-16 pt-6 border-t border-ui-concrete/10 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <p
+            suppressHydrationWarning
+            className="text-ui-concrete uppercase tracking-widest text-[10px] font-bold"
           >
-            <h2 className="text-ui-concrete uppercase tracking-widest text-xs font-bold mb-1">
-              {column.title}
-            </h2>
-            {column.links.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="text-primary-cream uppercase tracking-widest text-xs font-bold hover:text-accent-energy transition-colors w-fit sm:w-fit mx-auto sm:mx-0"
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
-        ))}
-      </div>
+            &copy; {year} Apeiron. All rights reserved.
+          </p>
 
-      <div className="max-w-7xl mx-auto mt-12 pt-6 border-t border-ui-concrete/10">
-        {/* suppressHydrationWarning: the year is computed at render time and may
-            differ between the build-time SSR HTML and the client hydration
-            (e.g. across a New Year boundary); this is the documented Next.js
-            pattern for time-sensitive content. */}
-        <p
-          suppressHydrationWarning
-          className="text-ui-concrete uppercase tracking-widest text-xs font-bold text-center sm:text-right"
-        >
-          &copy; {year} Apeiron
-        </p>
+          <div className="flex items-center gap-6">
+            <Link
+              href="#"
+              className="text-ui-concrete uppercase tracking-widest text-[10px] font-bold hover:text-primary-cream transition-colors"
+            >
+              Privacy Policy
+            </Link>
+            <Link
+              href="#"
+              className="text-ui-concrete uppercase tracking-widest text-[10px] font-bold hover:text-primary-cream transition-colors"
+            >
+              Terms of Service
+            </Link>
+          </div>
+        </div>
       </div>
     </footer>
+  );
+}
+
+function LocationIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      className={className}
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"
+      />
+    </svg>
   );
 }

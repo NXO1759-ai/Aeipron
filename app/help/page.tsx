@@ -13,9 +13,9 @@ import { Disclosure } from '@/components/Disclosure';
 // pages ARE canonical, linkable destinations — unlike /cart, they SHOULD be
 // indexed, so there is no robots:noindex here.
 //
-// LAYOUT: top padding is owned by LayoutWrapper's <main className="pt-24">, so
-// this page adds bottom padding only (matching the /collection convention) —
-// adding `py-*` here would double the top whitespace.
+// LAYOUT: top padding is owned by LayoutWrapper's <main className="pt-24">. We
+// add extra top breathing room (`pt-10 md:pt-16`) so the eyebrow is not glued to
+// the fixed header, plus bottom padding matching the /collection convention.
 // ---------------------------------------------------------------------------
 
 export const metadata: Metadata = {
@@ -39,7 +39,7 @@ export default function HelpPage() {
 
   return (
     <div className="min-h-screen bg-apeiron-black text-apeiron-ivory">
-      <div className="max-w-3xl mx-auto px-4 md:px-12 pb-24 md:pb-32">
+      <div className="max-w-3xl mx-auto px-4 md:px-12 pt-10 md:pt-16 pb-24 md:pb-32">
         <header className="mb-12 md:mb-16">
           <p className="text-xs uppercase tracking-widest text-ui-concrete mb-4">Support</p>
           <h1 className="font-inter text-4xl md:text-5xl font-medium uppercase tracking-tighter">

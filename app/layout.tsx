@@ -13,9 +13,17 @@ const inter = Inter({
   variable: '--font-inter',
 });
 
+const META_LOGO_URL =
+  'https://cdn.shopify.com/s/files/1/0792/2286/6117/files/logo1_893b43be-2861-4136-8d1f-bffe2769646b.jpg?v=1784203862';
+
 export const metadata: Metadata = {
   title: 'Aeipron - Balance of Street & Luxury',
   description: 'Limitless and infinite. High-Density 3D Ink Print Technology.',
+  icons: {
+    icon: META_LOGO_URL,
+    shortcut: META_LOGO_URL,
+    apple: META_LOGO_URL,
+  },
 };
 
 export default function RootLayout({children}: {children: React.ReactNode}) {
