@@ -10,7 +10,7 @@ import { NewsletterForm } from './NewsletterForm';
 //   1. Brand block — Apeiron text lockup (matches Header), Japanese tagline,
 //      body copy, divider, shipping-from address, social icons.
 //   2. Shop links — Collection, Our Story (with arrows).
-//   3. Support links — Help / FAQ, Contact Us (with arrows).
+//   3. Support links — Help Center, Contact Us (with arrows).
 //   4. Stay in the Loop — newsletter copy + NewsletterForm email capture.
 //
 // Bottom bar: copyright (left), Privacy Policy + Terms of Service (right).
@@ -28,7 +28,7 @@ const shopLinks = [
 ];
 
 const supportLinks = [
-  { label: 'Help / FAQ', href: '/help' },
+  { label: 'Help Center', href: '/help' },
   { label: 'Contact Us', href: '/contact' },
 ];
 

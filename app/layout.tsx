@@ -14,7 +14,7 @@ const inter = Inter({
 });
 
 const META_LOGO_URL =
-  'https://cdn.shopify.com/s/files/1/0792/2286/6117/files/logo1_893b43be-2861-4136-8d1f-bffe2769646b.jpg?v=1784203862';
+  'https://cdn.shopify.com/s/files/1/0792/2286/6117/files/0f00aa58-86ff-46af-85ec-9b140350d58b_1.jpg?v=1784221209';
 
 export const metadata: Metadata = {
   title: 'Aeipron - Balance of Street & Luxury',
