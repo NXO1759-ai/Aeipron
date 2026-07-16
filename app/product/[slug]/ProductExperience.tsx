@@ -7,6 +7,11 @@ import { resolveSelectedVariant } from '@/lib/product';
 import { RichText } from '@/components/RichText';
 import type { Product, ProductOption } from '@/lib/types';
 
+/** Shown inside a disclosure when its metafield has no value yet — the store
+ * hasn't filled it in (or the definition isn't exposed to the Storefront API).
+ * The section still renders so the page structure is stable across products. */
+const NO_CONTENT_MESSAGE = 'No content available yet.';
+
 // ---------------------------------------------------------------------------
 // ProductExperience — the interactive product detail (client island).
 //
@@ -197,10 +202,12 @@ export function ProductExperience({ product }: { product: Product }) {
             </button>
 
             {/* Additional Info — native disclosure widgets (keyboard + touch
-                accessible), driven by Shopify `rich_text` metafields. A section
-                renders only when its metafield has content (undefined when the
-                product doesn't have it set, or its definition isn't exposed to
-                the Storefront API). Shipping & Returns was removed per client
+                accessible), driven by Shopify `rich_text` metafields. All three
+                sections always render so the structure is stable across products.
+                When a metafield has no value yet (null/undefined — the store
+                hasn't filled it in, or its definition isn't exposed to the
+                Storefront API), the disclosure shows NO_CONTENT_MESSAGE instead
+                of disappearing. Shipping & Returns was removed per client
                 direction. The metafield value is a `rich_text` JSON string
                 rendered by <RichText> (NOT HTML — see components/RichText). */}
             <div className="mt-16 space-y-6 border-t border-ui-concrete/20 pt-8">
@@ -208,21 +215,23 @@ export function ProductExperience({ product }: { product: Product }) {
                 { title: 'Details & Fabrication', value: product.detailsFabrication },
                 { title: 'Product Care', value: product.productCare },
                 { title: 'Product Sizing', value: product.productSizing },
-              ]
-                .filter((section) => section.value)
-                .map((section) => (
-                  <details key={section.title} className="border-b border-ui-concrete/20 pb-6 group">
-                    <summary className="uppercase tracking-widest font-bold text-sm cursor-pointer list-none flex items-center justify-between hover:text-accent-energy transition-colors">
-                      {section.title}
-                      <span className="text-ui-concrete transition-transform group-open:rotate-45" aria-hidden="true">
-                        +
-                      </span>
-                    </summary>
-                    <div className="text-sm text-ui-concrete mt-2 space-y-2">
+              ].map((section) => (
+                <details key={section.title} className="border-b border-ui-concrete/20 pb-6 group">
+                  <summary className="uppercase tracking-widest font-bold text-sm cursor-pointer list-none flex items-center justify-between hover:text-accent-energy transition-colors">
+                    {section.title}
+                    <span className="text-ui-concrete transition-transform group-open:rotate-45" aria-hidden="true">
+                      +
+                    </span>
+                  </summary>
+                  <div className="text-sm text-ui-concrete mt-2 space-y-2">
+                    {section.value ? (
                       <RichText value={section.value} />
-                    </div>
-                  </details>
-                ))}
+                    ) : (
+                      <p className="italic">{NO_CONTENT_MESSAGE}</p>
+                    )}
+                  </div>
+                </details>
+              ))}
             </div>
           </div>
         </div>
