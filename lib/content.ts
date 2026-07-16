@@ -133,7 +133,8 @@ export function getContactContent(): ContactInfo {
     address: 'New York, USA',
     hours: 'Studio hours: Mon–Fri, 9am–6pm ET',
     socials: [
-      { label: 'Instagram', href: 'https://instagram.com/apeiron' },
+      { label: 'Instagram', href: 'https://www.instagram.com/apeiron.nyc/?hl=en' },
+      { label: 'TikTok', href: 'https://www.tiktok.com/@apeiron.nyc' },
     ],
   };
 }

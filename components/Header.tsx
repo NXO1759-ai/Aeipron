@@ -29,7 +29,13 @@ export function Header() {
   return (
     <>
       <header
-        className={`fixed top-0 w-full z-40 ${isHome ? "bg-transparent" : "bg-apeiron-black/70 backdrop-blur-md border-b border-ui-concrete/10"}`}
+        // OPAQUE (not translucent + backdrop-blur). `backdrop-filter: blur()` on a
+        // position:fixed element is the classic site-wide scroll-jank cause —
+        // the browser re-rasterizes the blurred backdrop every scroll frame.
+        // In this dark theme an opaque bar is visually near-identical to the
+        // old 70%-black + blur, but composites a single layer with no per-frame
+        // filter cost. Home stays transparent (no scroll there).
+        className={`fixed top-0 w-full z-40 ${isHome ? "bg-transparent" : "bg-apeiron-black border-b border-ui-concrete/10"}`}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-24 flex items-center justify-between">
           {/* Left Hemisphere: Brand Lockup */}
