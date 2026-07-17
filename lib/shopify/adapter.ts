@@ -55,6 +55,17 @@ export function mapProduct(node: ShopifyProductNode): Product {
     description: node.description,
     images: mapImages(node),
     options: mapOptions(node.variants.nodes, node.featuredImage?.url),
+    // Full variant matrix — the source of truth for resolving the exact variant
+    // to add to the cart (see resolveSelectedVariant). Each variant carries its
+    // GID, availability, full selectedOptions (so a multi-dimension selection
+    // like Color=Black + Size=large can be matched), price, and image.
+    variants: node.variants.nodes.map((v) => ({
+      id: v.id,
+      availableForSale: v.availableForSale,
+      selectedOptions: v.selectedOptions,
+      price: Number(v.price.amount),
+      image: v.image?.url ?? node.featuredImage?.url ?? '',
+    })),
     // Rich-text metafield values pass through verbatim as strings (undefined
     // when absent). The Storefront API returns `rich_text` as a JSON string;
     // the client parses + renders it (components/RichText) — the adapter does
@@ -112,10 +123,12 @@ function mapImages(node: ShopifyProductNode): string[] {
  *
  * This is exact for single-dimension products (the only kind in the catalog
  * today: one variant per value). For multi-dimension products (Size × Color),
- * value-level availability is an over-approximation — a true matrix picker
- * would need the specific variant's availability, which is a Phase 2+ concern
- * (the cart will switch to the variant GID anyway). The aggregation keeps the
- * selector safe and non-blocking for v1's single-dimension catalog.
+ * value-level availability is an over-approximation — a value can show as in
+ * stock when the specific cross-dimension combination the buyer selects is not.
+ * That is acceptable for the picker UX: the actual cart add resolves the EXACT
+ * variant from `Product.variants` (see `resolveSelectedVariant`), so an
+ * out-of-stock combination resolves to null and is never added. The aggregation
+ * keeps the selector safe and non-blocking for the single-dimension catalog.
  *
  * Groups and values are returned in first-seen order — do not sort.
  */
@@ -142,7 +155,6 @@ function mapOptions(variants: ShopifyProductVariant[], featuredImageUrl?: string
           value: opt.value,
           inStock: variant.availableForSale,
           price: variantPrice,
-          variantId: variant.id,
           image: variantImage,
         });
       } else {
@@ -150,7 +162,6 @@ function mapOptions(variants: ShopifyProductVariant[], featuredImageUrl?: string
         existing.inStock = existing.inStock || variant.availableForSale;
         if (variantPrice < existing.price) {
           existing.price = variantPrice;
-          existing.variantId = variant.id;
           existing.image = variantImage;
         }
       }

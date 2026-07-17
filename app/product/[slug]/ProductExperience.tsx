@@ -38,7 +38,7 @@ export function ProductExperience({ product }: { product: Product }) {
   const { addItem } = useCart();
 
   const selectedVariant = resolveSelectedVariant(product, selections);
-  const selectedVariantId = selectedVariant?.variantId ?? null;
+  const selectedVariantId = selectedVariant?.id ?? null;
   const selectedVariantPrice = selectedVariant?.price ?? null;
 
   // Active image: a manually-browsed thumbnail wins, then the selected variant's
