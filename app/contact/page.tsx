@@ -44,8 +44,6 @@ export default function ContactPage() {
             within one business day.
           </p>
         </header>
-
-        {}
         <section>
           <h2 className="text-lg font-bold uppercase tracking-widest text-primary-cream mb-8">
             Send us a message
