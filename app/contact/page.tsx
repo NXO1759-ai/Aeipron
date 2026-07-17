@@ -45,7 +45,7 @@ export default function ContactPage() {
           </p>
         </header>
 
-        {/* Contact form — a client island inside the static page. The server
+        {/* Contact form -- a client island inside the static page. The server
             action writes a contact_message metaobject to Shopify via the Admin
             API, so submissions land in Shopify admin (and are emailed if the
             store has a Shopify Flow wired to the metaobject). */}
