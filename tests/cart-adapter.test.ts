@@ -79,25 +79,48 @@ describe('mapCartLine', () => {
     });
   });
 
-  describe('size mapping', () => {
-    it('uses the Size selectedOption value when present', () => {
+  describe('variantLabel mapping', () => {
+    it('uses the Size selectedOption value when Size is the only option', () => {
       const line = mapCartLine(singleLineCartNode.lines.edges[0].node);
-      expect(line.size).toBe('Small');
+      expect(line.variantLabel).toBe('Small');
     });
 
     it('uses Medium for an M-sized variant', () => {
       const line = mapCartLine(euroCartNode.lines.edges[0].node);
-      expect(line.size).toBe('Medium');
+      expect(line.variantLabel).toBe('Medium');
     });
 
-    it('falls back to OS when the variant has no Size option', () => {
+    it('falls back to OS for a Title-only (single-variant) product', () => {
       const line = mapCartLine(nullImageCartLine);
-      expect(line.size).toBe('OS');
+      expect(line.variantLabel).toBe('OS');
     });
 
-    it('falls back to OS for a Color-only variant (no Size option)', () => {
+    it('uses the Color value for a Color-only variant (no Size option)', () => {
       const line = mapCartLine(multiLineCartNode.lines.edges[1].node);
-      expect(line.size).toBe('OS');
+      expect(line.variantLabel).toBe('Red');
+    });
+
+    it('joins all option values for a multi-dimension variant (Color × Size)', () => {
+      const line = mapCartLine({
+        id: 'gid://shopify/CartLine/multi1',
+        quantity: 1,
+        cost: {
+          amountPerQuantity: { amount: '80.0', currencyCode: 'USD' },
+          totalAmount: { amount: '80.0', currencyCode: 'USD' },
+        },
+        merchandise: {
+          id: 'gid://shopify/ProductVariant/BlackLarge',
+          title: 'Black / large',
+          price: { amount: '80.0', currencyCode: 'USD' },
+          image: null,
+          selectedOptions: [
+            { name: 'Color', value: 'Black' },
+            { name: 'Size', value: 'large' },
+          ],
+          product: { title: 'Hoodie', handle: 'hoodie' },
+        },
+      });
+      expect(line.variantLabel).toBe('Black / large');
     });
   });
 
@@ -218,7 +241,7 @@ describe('mapCart', () => {
         merchandiseId: 'gid://shopify/ProductVariant/46514157256901',
         name: 'Shirts',
         price: 10,
-        size: 'Small',
+        variantLabel: 'Small',
         quantity: 2,
         currencyCode: 'USD',
       });
@@ -227,7 +250,7 @@ describe('mapCart', () => {
     it('image fallback works through the full cart path (null image → "")', () => {
       const cart = mapCart(nullImageCartNode);
       expect(cart.lines[0].image).toBe('');
-      expect(cart.lines[0].size).toBe('OS');
+      expect(cart.lines[0].variantLabel).toBe('OS');
     });
   });
 });

@@ -61,6 +61,12 @@ export interface ShopifyProductNode {
   images?: { nodes: ShopifyImage[] };
   variants: { nodes: ShopifyProductVariant[] };
   priceRange: ShopifyProductPriceRange;
+  // Selected ONLY on the detail query (aliased `metafield(...)` in the `custom`
+  // namespace). Each is the Storefront `Metafield` shape (`{ value }`) or null;
+  // `value` is a `rich_text` JSON string. Absent on collection-card nodes.
+  detailsFabrication?: { value: string | null } | null;
+  productCare?: { value: string | null } | null;
+  productSizing?: { value: string | null } | null;
 }
 
 /** A Shopify Collection (category) node. */

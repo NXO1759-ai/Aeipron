@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Instagram, Youtube, Mail } from 'lucide-react';
+import { Instagram } from 'lucide-react';
 import { getContactContent } from '@/lib/content';
 import { NewsletterForm } from './NewsletterForm';
 
@@ -10,7 +10,7 @@ import { NewsletterForm } from './NewsletterForm';
 //   1. Brand block — Apeiron text lockup (matches Header), Japanese tagline,
 //      body copy, divider, shipping-from address, social icons.
 //   2. Shop links — Collection, Our Story (with arrows).
-//   3. Support links — Help / FAQ, Contact Us (with arrows).
+//   3. Support links — Help Center, Contact Us (with arrows).
 //   4. Stay in the Loop — newsletter copy + NewsletterForm email capture.
 //
 // Bottom bar: copyright (left), Privacy Policy + Terms of Service (right).
@@ -28,21 +28,21 @@ const shopLinks = [
 ];
 
 const supportLinks = [
-  { label: 'Help / FAQ', href: '/help' },
+  { label: 'Help Center', href: '/help' },
   { label: 'Contact Us', href: '/contact' },
 ];
 
+// Brand socials — Instagram + TikTok only (per brand direction). Both open
+// in a new tab; Lucide ships Instagram, so only TikTok is an inline glyph below.
 const socials = [
-  { label: 'Instagram', href: 'https://instagram.com/apeiron', icon: Instagram },
-  { label: 'X', href: 'https://x.com/apeiron', icon: XIcon },
-  { label: 'YouTube', href: 'https://youtube.com/apeiron', icon: Youtube },
-  { label: 'Email', href: 'mailto:hello@apeiron.com', icon: Mail },
+  { label: 'Instagram', href: 'https://www.instagram.com/apeiron.nyc/?hl=en', icon: Instagram },
+  { label: 'TikTok', href: 'https://www.tiktok.com/@apeiron.nyc', icon: TikTokIcon },
 ];
 
 // ---------------------------------------------------------------------------
-// Inline SVG for the X logo (Lucide does not ship a branded X icon).
+// Inline SVG for the TikTok logo (Lucide does not ship a branded TikTok icon).
 // ---------------------------------------------------------------------------
-function XIcon({ className }: { className?: string }) {
+function TikTokIcon({ className }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -50,7 +50,7 @@ function XIcon({ className }: { className?: string }) {
       className={className}
       aria-hidden="true"
     >
-      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+      <path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.86-.5-4.09-1.27-.01 2.86.01 5.71-.02 8.57-.07 1.53-.69 3.04-1.77 4.13-1.35 1.38-3.36 2.12-5.36 1.86-2.05-.25-3.95-1.6-4.84-3.45-1.01-2.06-.62-4.71.97-6.36 1.04-1.08 2.58-1.74 4.11-1.71.02 1.43-.04 2.86-.03 4.29-.71-.23-1.54-.08-2.13.49-.71.59-.93 1.66-.55 2.49.36.86 1.34 1.4 2.26 1.28.91-.1 1.7-.85 1.91-1.74.12-.66.07-1.34.08-2.01.02-4.21 0-8.42.02-12.63z" />
     </svg>
   );
 }

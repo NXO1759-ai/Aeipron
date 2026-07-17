@@ -4,7 +4,7 @@ import { getHelpContent } from '@/lib/content';
 import { Disclosure } from '@/components/Disclosure';
 
 // ---------------------------------------------------------------------------
-// /help — the Help / FAQ page.
+// /help — the Help Center page.
 //
 // A static Server Component (prerendered at build time — no fetch, no
 // `force-dynamic`) that renders FAQ accordion sections from lib/content. The
@@ -19,7 +19,7 @@ import { Disclosure } from '@/components/Disclosure';
 // ---------------------------------------------------------------------------
 
 export const metadata: Metadata = {
-  title: 'Help & FAQ — Apeiron',
+  title: 'Help Center — Apeiron',
   description:
     'Answers to common questions about orders, shipping, returns, product care, and sizing at Apeiron.',
 };
@@ -43,7 +43,7 @@ export default function HelpPage() {
         <header className="mb-12 md:mb-16">
           <p className="text-xs uppercase tracking-widest text-ui-concrete mb-4">Support</p>
           <h1 className="font-inter text-4xl md:text-5xl font-medium uppercase tracking-tighter">
-            Help &amp; FAQ
+            Help Center
           </h1>
           <p className="mt-4 text-ui-concrete leading-relaxed max-w-xl">
             Quick answers to the questions we hear most. Can&rsquo;t find what you&rsquo;re looking

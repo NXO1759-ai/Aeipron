@@ -43,7 +43,7 @@ export function CartLineItem({
             <h3 className="text-primary-cream uppercase tracking-wider font-bold text-sm">{item.name}</h3>
             <p className="text-primary-cream font-mono">{formatCurrency(item.price, currencyCode)}</p>
           </div>
-          <p className="text-ui-concrete text-sm mt-1">Size: {item.size}</p>
+          <p className="text-ui-concrete text-sm mt-1">Variant: {item.variantLabel}</p>
         </div>
         <div className="flex justify-between items-center mt-4">
           {/* Quantity stepper */}

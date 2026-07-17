@@ -3,20 +3,28 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import { useCart } from '@/store/use-cart';
-import { resolveSelectedVariant } from '@/lib/product';
+import { resolveSelectedVariant, resolvePreviewVariant, variantDescriptor } from '@/lib/product';
+import { RichText } from '@/components/RichText';
 import type { Product, ProductOption } from '@/lib/types';
+
+/** Shown inside a disclosure when its metafield has no value yet — the store
+ * hasn't filled it in (or the definition isn't exposed to the Storefront API).
+ * The section still renders so the page structure is stable across products. */
+const NO_CONTENT_MESSAGE = 'No content available yet.';
 
 // ---------------------------------------------------------------------------
 // ProductExperience — the interactive product detail (client island).
 //
 // Owns the per-option-group selection state and renders BOTH the gallery
 // (left) and the buybox (right) so they share one source of truth. The gallery's
-// active image follows the selected variant — exactly like the price — and
-// falls back to the first product image (or a placeholder) when no variant is
-// selected or the variant has no image.
+// active image follows the PARTIAL selection via `resolvePreviewVariant` (it
+// reacts to the first color pick, before every group is chosen), while the
+// price + cart merchandiseId use `resolveSelectedVariant` (the exact, in-stock
+// variant — needs every group selected). Both fall back to the first product
+// image (or a placeholder) when nothing is selected or no image is available.
 //
-// The selection → variant → image/price/merchandiseId chain is pure
-// (`resolveSelectedVariant`), so the gallery and the buybox can never disagree.
+// The selection → preview/selected variant → image/price/merchandiseId chain is
+// pure, so the gallery and the buybox can never disagree.
 //
 // Hydration: initial render uses an empty selection → active image is
 // `product.images[0]`, which matches the server render (no mismatch). The
@@ -32,27 +40,40 @@ export function ProductExperience({ product }: { product: Product }) {
   const { addItem } = useCart();
 
   const selectedVariant = resolveSelectedVariant(product, selections);
-  const selectedVariantId = selectedVariant?.variantId ?? null;
+  const selectedVariantId = selectedVariant?.id ?? null;
   const selectedVariantPrice = selectedVariant?.price ?? null;
+  // Preview variant for the gallery: matches the PARTIAL selection (wildcards
+  // on unselected groups, ignores availability) so the image reacts to the
+  // first color pick — without waiting for every group to be selected (which
+  // the cart-add resolver requires). Null only when nothing is selected.
+  const previewVariant = resolvePreviewVariant(product, selections);
 
-  // Active image: a manually-browsed thumbnail wins, then the selected variant's
-  // image, then the first product image. '' only when the product has no images
-  // AND the variant has none — the gallery renders a placeholder then.
+  // Active image: a manually-browsed thumbnail wins, then the preview variant's
+  // image (reflects the selection so far), then the first product image. '' only
+  // when the product has no images AND no variant has one — the gallery renders a
+  // placeholder then.
   const activeImage =
     manualIndex != null
       ? product.images[manualIndex] ?? ''
-      : selectedVariant?.image || product.images[0] || '';
+      : previewVariant?.image || product.images[0] || '';
 
   const handleAddToCart = async () => {
-    if (!selectedVariantId) return;
+    if (!selectedVariant) return;
+    // Variant descriptor shown in the cart: built from the RESOLVED variant's
+    // own selectedOptions via the same `variantDescriptor` the adapter uses for
+    // mapCartLine — so the optimistic line and the reconciled server line are
+    // byte-identical and never flicker. Reading from selectedVariant (not
+    // product.options / selections) avoids any cross-variant ordering
+    // assumption: the server labels the same variant from the same field.
+    const variantLabel = variantDescriptor(selectedVariant.selectedOptions);
     // The browser never sends a price — `price` here is display-only (the
     // optimistic line in the cart cache) and uses the SELECTED variant's price.
     await addItem({
-      merchandiseId: selectedVariantId,
+      merchandiseId: selectedVariant.id,
       name: product.name,
-      price: selectedVariantPrice ?? product.price,
-      size: Object.values(selections).join(' / '),
-      image: selectedVariant?.image || product.images[0] || '',
+      price: selectedVariant.price,
+      variantLabel,
+      image: selectedVariant.image || product.images[0] || '',
       currencyCode: 'USD',
     });
   };
@@ -137,12 +158,16 @@ export function ProductExperience({ product }: { product: Product }) {
               <div key={group.name} className="mb-10">
                 <div className="mb-6 flex justify-between items-end">
                   <span className="uppercase tracking-widest text-sm font-bold">Select {group.name}</span>
+                  {/* Size Guide button — commented out per client direction.
+                      Kept here (not deleted) so it can be re-wired to a size
+                      chart later. Re-enable by uncommenting the JSX below.
                   <button
                     type="button"
                     className="text-ui-concrete hover:text-primary-cream underline-offset-4 hover:underline text-xs tracking-widest uppercase transition-all"
                   >
                     {group.name} Guide
                   </button>
+                  */}
                 </div>
 
                 <div className="flex flex-wrap gap-3">
@@ -191,24 +216,35 @@ export function ProductExperience({ product }: { product: Product }) {
               {selectedVariantId ? 'Add to bag' : 'Select an option'}
             </button>
 
-            {/* Additional Info — native disclosure widgets (keyboard + touch accessible).
-                Placeholder copy; replaced by Shopify metafields in a later phase. */}
+            {/* Additional Info — native disclosure widgets (keyboard + touch
+                accessible), driven by Shopify `rich_text` metafields. All three
+                sections always render so the structure is stable across products.
+                When a metafield has no value yet (null/undefined — the store
+                hasn't filled it in, or its definition isn't exposed to the
+                Storefront API), the disclosure shows NO_CONTENT_MESSAGE instead
+                of disappearing. Shipping & Returns was removed per client
+                direction. The metafield value is a `rich_text` JSON string
+                rendered by <RichText> (NOT HTML — see components/RichText). */}
             <div className="mt-16 space-y-6 border-t border-ui-concrete/20 pt-8">
               {[
-                {
-                  title: 'Details & Fabrication',
-                  content: '100% Japanese Cotton. 450GSM loopback terry. High-density 3D ink back graphic. Made in Portugal.',
-                },
-                { title: 'Shipping & Returns', content: 'Complimentary express shipping on all orders over $200. 14-day return policy.' },
-              ].map((section, i) => (
-                <details key={i} className="border-b border-ui-concrete/20 pb-6 group">
+                { title: 'Details & Fabrication', value: product.detailsFabrication },
+                { title: 'Product Care', value: product.productCare },
+                { title: 'Product Sizing', value: product.productSizing },
+              ].map((section) => (
+                <details key={section.title} className="border-b border-ui-concrete/20 pb-6 group">
                   <summary className="uppercase tracking-widest font-bold text-sm cursor-pointer list-none flex items-center justify-between hover:text-accent-energy transition-colors">
                     {section.title}
                     <span className="text-ui-concrete transition-transform group-open:rotate-45" aria-hidden="true">
                       +
                     </span>
                   </summary>
-                  <p className="text-sm text-ui-concrete mt-2">{section.content}</p>
+                  <div className="text-sm text-ui-concrete mt-2 space-y-2">
+                    {section.value ? (
+                      <RichText value={section.value} />
+                    ) : (
+                      <p className="italic">{NO_CONTENT_MESSAGE}</p>
+                    )}
+                  </div>
                 </details>
               ))}
             </div>

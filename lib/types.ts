@@ -3,20 +3,25 @@
 
 /**
  * A single selectable value within a product option group (e.g. "Red", "Small").
- * `inStock` is sourced from the Shopify variant's `availableForSale`. `price` is
- * the variant's own price (parsed from Shopify's Decimal string) so the UI can
- * show a per-selection price; it is display-only — the server/Shopify is the
- * source of truth at checkout.
+ * `inStock` is an AGGREGATE across every variant that offers this value — true
+ * if ANY such variant is `availableForSale`. For multi-dimension products
+ * (Size × Color) this is an over-approximation: a value can show as in stock
+ * when the specific cross-dimension combination the buyer selects is not. That
+ * is acceptable for the picker UX; the actual cart add resolves the EXACT
+ * variant from `Product.variants` (see `resolveSelectedVariant`), so an
+ * out-of-stock combination resolves to null and is never added.
+ *
+ * `price` / `image` are likewise aggregates (min price / first image across the
+ * variants offering this value) and are display-only for the picker. The live
+ * price + gallery image come from the resolved `ProductVariant`.
  */
 export interface ProductOptionValue {
   value: string;
   inStock: boolean;
   price: number;
-  variantId: string; // Shopify ProductVariant GID — needed by the cart (Phase 2)
   // The variant's own image URL, falling back to the product's featuredImage
-  // when the variant has none. Drives the product-gallery image switch: the
-  // active image follows the selected variant (like the price). '' when
-  // neither the variant nor the product has an image (never an empty <img src>).
+  // when the variant has none. '' when neither the variant nor the product has
+  // an image (never an empty <img src>).
   image: string;
 }
 
@@ -31,6 +36,28 @@ export interface ProductOption {
   values: ProductOptionValue[];
 }
 
+/**
+ * A single sellable variant — one combination of option values (e.g. Color=Black
+ * + Size=large). This is the FULL variant matrix: the source of truth for variant
+ * identity, price, image, and availability. `resolveSelectedVariant` matches the
+ * buyer's per-group selection against `selectedOptions` to find the exact
+ * variant to add to the cart — this is what makes multi-dimension products work
+ * (the per-value `ProductOptionValue` aggregates cannot represent a specific
+ * combination, which is why the old single-dimension resolver always added the
+ * first/cheapest size regardless of the selected size).
+ *
+ * `id` is the Shopify ProductVariant GID used to create a cart line. `price` is
+ * display-only (Shopify prices the line at checkout). `image` is the variant's
+ * own image, falling back to the product's featuredImage.
+ */
+export interface ProductVariant {
+  id: string; // Shopify ProductVariant GID — passed to cartLinesAdd/cartCreate
+  availableForSale: boolean;
+  selectedOptions: { name: string; value: string }[];
+  price: number; // variant's own price — display + optimistic cart line
+  image: string; // variant image URL, '' if neither variant nor product has one
+}
+
 export interface Product {
   id: string; // Shopify handle — used as the /product/[slug] route param
   name: string;
@@ -38,7 +65,16 @@ export interface Product {
   priceMax: number; // maxVariantPrice — equals `price` when all variants share one price
   description: string;
   images: string[];
-  options: ProductOption[];
+  options: ProductOption[]; // grouped per-dimension values for picker rendering
+  variants: ProductVariant[]; // full matrix — source of truth for variant resolution
+  // Custom product metafields (Rich Text) from the `custom` namespace. Each is
+  // the Storefront API `rich_text` value — a JSON STRING (a tree of typed
+  // nodes), NOT HTML — rendered by components/RichText. Undefined when the
+  // product doesn't have the metafield set or its definition isn't exposed to
+  // the Storefront API; the UI treats undefined as "section absent".
+  detailsFabrication?: string;
+  productCare?: string;
+  productSizing?: string;
 }
 
 export interface MerchItem {
@@ -95,9 +131,14 @@ export interface Collection extends CollectionSummary {
 export interface CartLine {
   lineId: string; // Shopify cart-line GID — unique key for updates/removal/React
   merchandiseId: string; // Shopify ProductVariant GID — used to create a line
-  name: string; // display name (product title, optionally with size)
+  name: string; // display name (product title)
   price: number; // display-only, from Shopify cost.amountPerQuantity
-  size: string; // Size selectedOption value, or 'OS' for one-size products
+  // The variant descriptor shown under the line: ALL selectedOption values
+  // joined in Shopify order (e.g. "Black / large"), skipping a lone 'Title'
+  // group; 'OS' when no real options remain (one-size / single-variant items).
+  // Built server-side from the resolved variant's selectedOptions and mirrored
+  // EXACTLY by the optimistic line in the cart store, so the two never flicker.
+  variantLabel: string;
   quantity: number;
   image: string; // variant image URL, '' if none
   currencyCode: string; // e.g. 'USD' — from cost.amountPerQuantity.currencyCode

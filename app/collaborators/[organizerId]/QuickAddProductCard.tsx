@@ -21,7 +21,7 @@ export function QuickAddProductCard({ product }: { product: MerchItem }) {
     addItem({
       name: product.name,
       price: product.price,
-      size,
+      variantLabel: size,
       image: product.image,
     });
     setIsQuickAddOpen(false);

@@ -400,7 +400,7 @@ export function CheckoutExperience({ cart }: CheckoutExperienceProps) {
                     {item.name}
                   </h4>
                   <p className="text-ui-concrete text-xs uppercase tracking-widest mt-1">
-                    Size: {item.size}
+                    Variant: {item.variantLabel}
                   </p>
                 </div>
                 <div className="font-mono text-sm text-primary-cream">

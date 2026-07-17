@@ -170,6 +170,23 @@ export const PRODUCT_BY_HANDLE_QUERY = `#graphql
           altText
         }
       }
+      # Custom product metafields (Rich Text). These live in the 'custom'
+      # namespace and are read here — on the DETAIL query only — so collection
+      # cards (which use the shared ProductFields fragment) don't pay for them.
+      # The Storefront API returns a rich_text value as a JSON STRING (a tree
+      # of typed nodes), NOT HTML — the client renders it via components/RichText.
+      # A metafield reads back as null when the product doesn't have it set OR
+      # when its definition isn't 'exposed to the Storefront API' (an admin
+      # setting per definition); the UI treats null as 'section absent'.
+      detailsFabrication: metafield(namespace: "custom", key: "details_fabrication") {
+        value
+      }
+      productCare: metafield(namespace: "custom", key: "product_care") {
+        value
+      }
+      productSizing: metafield(namespace: "custom", key: "product_sizing") {
+        value
+      }
     }
   }
   ${PRODUCT_FRAGMENT}

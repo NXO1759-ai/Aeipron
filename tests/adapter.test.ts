@@ -130,19 +130,64 @@ describe('mapProduct', () => {
     });
   });
 
-  describe('variantId mapping', () => {
-    it('maps Shopify variant id → ProductOptionValue.variantId', () => {
+  describe('variants matrix', () => {
+    // The full variant matrix is the source of truth for resolving the exact
+    // variant to add to the cart (see resolveSelectedVariant). Each entry
+    // carries its Shopify GID, availability, full selectedOptions, price, image.
+
+    it('maps each Shopify variant node to a ProductVariant with its GID', () => {
       const product = mapProduct(shirtsProductNode);
-      expect(product.options[0].values[0].variantId).toBe(
+      expect(product.variants).toHaveLength(3);
+      expect(product.variants[0].id).toBe('gid://shopify/ProductVariant/46514157256901');
+      expect(product.variants.map((v) => v.id)).toEqual([
         'gid://shopify/ProductVariant/46514157256901',
-      );
+        'gid://shopify/ProductVariant/46514157289669',
+        'gid://shopify/ProductVariant/46514157322437',
+      ]);
     });
 
-    it('maps each variant to its own variantId', () => {
+    it('carries availability, selectedOptions, price, and image per variant', () => {
       const product = mapProduct(colorProductNode);
-      const red = product.options[0].values.find((v) => v.value === 'Red');
-      const black = product.options[0].values.find((v) => v.value === 'Black');
-      expect(red?.variantId).not.toBe(black?.variantId);
+      const red = product.variants.find((v) => v.selectedOptions[0].value === 'Red')!;
+      expect(red.availableForSale).toBe(true);
+      expect(red.selectedOptions).toEqual([{ name: 'Color', value: 'Red' }]);
+      expect(red.price).toBe(50);
+      expect(red.image).toBe('https://cdn.shopify.com/s/files/1/0792/2286/6117/files/red.jpg');
+    });
+
+    it('maps the White variant as not availableForSale', () => {
+      const product = mapProduct(colorProductNode);
+      const white = product.variants.find((v) => v.selectedOptions[0].value === 'White')!;
+      expect(white.availableForSale).toBe(false);
+    });
+
+    it('falls back to the product featuredImage when a variant has no image', () => {
+      // The White variant has image: null — it inherits the product's
+      // featuredImage so the matrix always has a usable image per variant.
+      const product = mapProduct(colorProductNode);
+      const white = product.variants.find((v) => v.selectedOptions[0].value === 'White')!;
+      expect(white.image).toBe(colorProductNode.featuredImage!.url);
+    });
+
+    it('falls back to featuredImage for size variants with no image', () => {
+      // shirtsProductNode variants all have image: null → featuredImage fallback.
+      const product = mapProduct(shirtsProductNode);
+      for (const v of product.variants) {
+        expect(v.image).toBe(shirtsProductNode.featuredImage!.url);
+      }
+    });
+
+    it('returns empty string when neither the variant nor the product has an image', () => {
+      const node = { ...shirtsProductNode, featuredImage: null };
+      const product = mapProduct(node);
+      expect(product.variants[0].image).toBe('');
+    });
+
+    it('keeps each variant image distinct per variant', () => {
+      const product = mapProduct(colorProductNode);
+      const red = product.variants.find((v) => v.selectedOptions[0].value === 'Red')!;
+      const black = product.variants.find((v) => v.selectedOptions[0].value === 'Black')!;
+      expect(red.image).not.toBe(black.image);
     });
   });
 
@@ -163,6 +208,29 @@ describe('mapProduct', () => {
       const black = product.options[0].values.find((v) => v.value === 'Black');
       expect(red?.image).toBe('https://cdn.shopify.com/s/files/1/0792/2286/6117/files/red.jpg');
       expect(black?.image).toBe('https://cdn.shopify.com/s/files/1/0792/2286/6117/files/black.jpg');
+    });
+
+    it('passes the rich-text metafield value through verbatim (does not parse JSON)', () => {
+      // The adapter is a pure shape translation — it must NOT interpret the
+      // rich_text JSON; the client parses + renders it (components/RichText).
+      const product = mapProduct(colorProductNode);
+      expect(product.detailsFabrication).toBe(colorProductNode.detailsFabrication!.value);
+      expect(product.productCare).toBe(colorProductNode.productCare!.value);
+    });
+
+    it('maps a null metafield to undefined (section treated as absent)', () => {
+      const product = mapProduct(colorProductNode);
+      expect(product.productSizing).toBeUndefined();
+    });
+
+    it('maps absent metafields (collection-card nodes) to undefined', () => {
+      // shirtsProductNode has no metafield selections (mirrors the shared
+      // fragment used by collection cards) — the fields must be undefined,
+      // never throw.
+      const product = mapProduct(shirtsProductNode);
+      expect(product.detailsFabrication).toBeUndefined();
+      expect(product.productCare).toBeUndefined();
+      expect(product.productSizing).toBeUndefined();
     });
 
     it('falls back to the product featuredImage when the variant has no image', () => {
