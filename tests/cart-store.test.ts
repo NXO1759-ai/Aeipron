@@ -61,7 +61,7 @@ const INPUT = {
   merchandiseId: 'gid://shopify/ProductVariant/46514157256901',
   name: 'Shirts',
   price: 10,
-  size: 'Small',
+  variantLabel: 'Small',
   image: 'https://cdn.shopify.com/x.jpg',
   currencyCode: 'USD',
 };
@@ -111,7 +111,7 @@ describe('openCart / closeCart / toggleCart', () => {
 
 describe('addItem', () => {
   it('rejects gracefully when the item has no merchandiseId (no Shopify call)', async () => {
-    await useCart.getState().addItem({ name: 'Mock Tee', price: 30, size: 'M', image: 'x' });
+    await useCart.getState().addItem({ name: 'Mock Tee', price: 30, variantLabel: 'M', image: 'x' });
     const s = useCart.getState();
     expect(s.status).toBe('error');
     expect(s.error).toBeTruthy();

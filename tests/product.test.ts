@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveSelectedVariant } from '@/lib/product';
+import { resolveSelectedVariant, resolvePreviewVariant, variantDescriptor } from '@/lib/product';
 import type { Product, ProductVariant } from '@/lib/types';
 
 /**
@@ -183,5 +183,101 @@ describe('resolveSelectedVariant', () => {
       { id: 'gid/Champ-L', availableForSale: true, selectedOptions: [{ name: 'Color', value: 'Champagne' }, { name: 'Size', value: 'L' }], price: 80, image: '' },
     ]);
     expect(resolveSelectedVariant(product, { Color: 'Black', Size: 'L' })).toBeNull();
+  });
+});
+
+describe('resolvePreviewVariant (gallery image)', () => {
+  it('returns null when nothing is selected (gallery falls back to images[0])', () => {
+    const product = makeProduct([
+      { id: 'gid/Black-S', availableForSale: true, selectedOptions: [{ name: 'Color', value: 'Black' }, { name: 'Size', value: 'S' }], price: 80, image: 'img/Black-S' },
+    ]);
+    expect(resolvePreviewVariant(product, {})).toBeNull();
+  });
+
+  it('reflects a PARTIAL selection (Color only) so the gallery reacts to the first pick', () => {
+    // The reported bug: on a Color × Size product, selecting only Color left the
+    // gallery stuck on images[0] because resolveSelectedVariant needs every
+    // group. The preview matches the first variant with the selected Color.
+    const product = makeProduct([
+      { id: 'gid/Black-S', availableForSale: true, selectedOptions: [{ name: 'Color', value: 'Black' }, { name: 'Size', value: 'S' }], price: 80, image: 'img/Black-S' },
+      { id: 'gid/Black-L', availableForSale: true, selectedOptions: [{ name: 'Color', value: 'Black' }, { name: 'Size', value: 'L' }], price: 80, image: 'img/Black-L' },
+      { id: 'gid/Champ-L', availableForSale: true, selectedOptions: [{ name: 'Color', value: 'Champagne' }, { name: 'Size', value: 'L' }], price: 80, image: 'img/Champ-L' },
+    ]);
+    const black = resolvePreviewVariant(product, { Color: 'Black' });
+    expect(black).not.toBeNull();
+    expect(black?.image).toBe('img/Black-S');
+    const champ = resolvePreviewVariant(product, { Color: 'Champagne' });
+    expect(champ?.image).toBe('img/Champ-L');
+  });
+
+  it('ignores availability — shows the image even for an out-of-stock combination', () => {
+    const product = makeProduct([
+      { id: 'gid/Black-L', availableForSale: false, selectedOptions: [{ name: 'Color', value: 'Black' }, { name: 'Size', value: 'L' }], price: 80, image: 'img/Black-L' },
+    ]);
+    // resolveSelectedVariant returns null (OOS); the preview still returns it so
+    // the buyer can see the selected color's image before choosing another size.
+    expect(resolveSelectedVariant(product, { Color: 'Black', Size: 'L' })).toBeNull();
+    expect(resolvePreviewVariant(product, { Color: 'Black', Size: 'L' })?.image).toBe('img/Black-L');
+  });
+
+  it('reflects a PARTIAL Size-only selection (the symmetric case)', () => {
+    // Selecting only Size on a Color × Size product must also drive the gallery,
+    // not just Color. The preview matches the first variant with that size.
+    const product = makeProduct([
+      { id: 'gid/Black-L', availableForSale: true, selectedOptions: [{ name: 'Color', value: 'Black' }, { name: 'Size', value: 'L' }], price: 80, image: 'img/Black-L' },
+      { id: 'gid/Champ-L', availableForSale: true, selectedOptions: [{ name: 'Color', value: 'Champagne' }, { name: 'Size', value: 'L' }], price: 80, image: 'img/Champ-L' },
+    ]);
+    const preview = resolvePreviewVariant(product, { Size: 'L' });
+    expect(preview).not.toBeNull();
+    expect(preview?.image).toBe('img/Black-L'); // first variant with Size=L
+  });
+
+  it('shows the image for a partial Color selection even when the only matching variant is out of stock', () => {
+    // The reported path: Color picked, Size not yet picked, and the only Black
+    // variant is OOS. The gallery must still show Black's image (preview ignores
+    // availability); resolveSelectedVariant would return null.
+    const product = makeProduct([
+      { id: 'gid/Black-S', availableForSale: false, selectedOptions: [{ name: 'Color', value: 'Black' }, { name: 'Size', value: 'S' }], price: 80, image: 'img/Black-S' },
+      { id: 'gid/Champ-L', availableForSale: true, selectedOptions: [{ name: 'Color', value: 'Champagne' }, { name: 'Size', value: 'L' }], price: 80, image: 'img/Champ-L' },
+    ]);
+    expect(resolveSelectedVariant(product, { Color: 'Black' })).toBeNull();
+    expect(resolvePreviewVariant(product, { Color: 'Black' })?.image).toBe('img/Black-S');
+  });
+});
+
+describe('variantDescriptor (shared cart label)', () => {
+  // The PDP's optimistic line and the adapter's mapCartLine both use this, so
+  // the two labels are byte-identical. These tests lock the contract.
+  it('joins all option values in order for a multi-dimension variant', () => {
+    expect(
+      variantDescriptor([
+        { name: 'Color', value: 'Black' },
+        { name: 'Size', value: 'large' },
+      ]),
+    ).toBe('Black / large');
+  });
+
+  it('uses the single value when there is one real option', () => {
+    expect(variantDescriptor([{ name: 'Size', value: 'Small' }])).toBe('Small');
+    expect(variantDescriptor([{ name: 'Color', value: 'Red' }])).toBe('Red');
+  });
+
+  it("falls back to 'OS' for a Title-only (single-variant) product", () => {
+    expect(variantDescriptor([{ name: 'Title', value: 'Default Title' }])).toBe('OS');
+  });
+
+  it('falls back to OS when there are no options', () => {
+    expect(variantDescriptor([])).toBe('OS');
+  });
+
+  it('skips a Title group but keeps real options alongside it', () => {
+    // Defensive: a 'Title' option mixed with a real one is not a real Shopify
+    // shape, but if it ever occurs, Title is dropped and the real value shows.
+    expect(
+      variantDescriptor([
+        { name: 'Title', value: 'Default Title' },
+        { name: 'Color', value: 'Red' },
+      ]),
+    ).toBe('Red');
   });
 });

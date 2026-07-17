@@ -131,9 +131,14 @@ export interface Collection extends CollectionSummary {
 export interface CartLine {
   lineId: string; // Shopify cart-line GID — unique key for updates/removal/React
   merchandiseId: string; // Shopify ProductVariant GID — used to create a line
-  name: string; // display name (product title, optionally with size)
+  name: string; // display name (product title)
   price: number; // display-only, from Shopify cost.amountPerQuantity
-  size: string; // Size selectedOption value, or 'OS' for one-size products
+  // The variant descriptor shown under the line: ALL selectedOption values
+  // joined in Shopify order (e.g. "Black / large"), skipping a lone 'Title'
+  // group; 'OS' when no real options remain (one-size / single-variant items).
+  // Built server-side from the resolved variant's selectedOptions and mirrored
+  // EXACTLY by the optimistic line in the cart store, so the two never flicker.
+  variantLabel: string;
   quantity: number;
   image: string; // variant image URL, '' if none
   currencyCode: string; // e.g. 'USD' — from cost.amountPerQuantity.currencyCode

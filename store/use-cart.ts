@@ -55,12 +55,15 @@ function subtotalOf(items: CartLine[]): number {
  *  `lineId` (synthetic until the server responds) and `quantity` (passed separately).
  *  `merchandiseId` is optional only so organizer QuickAdd (Phase 4 — no variant
  *  GID yet) can call addItem and get a graceful "not available" error instead of
- *  a crash. Real product adds always supply it. */
+ *  a crash. Real product adds always supply it. `variantLabel` is the descriptor
+ *  shown under the line (e.g. "Black / large" or "Small"); the caller builds it
+ *  to match what the server's lineLabel will produce so the optimistic line and
+ *  the reconciled server line never flicker. */
 export interface AddItemInput {
   merchandiseId?: string;
   name: string;
   price: number;
-  size: string;
+  variantLabel: string;
   image: string;
   currencyCode?: string;
 }
@@ -150,7 +153,7 @@ export const useCart = create<CartState>()((set, get) => ({
       merchandiseId: item.merchandiseId,
       name: item.name,
       price: item.price,
-      size: item.size,
+      variantLabel: item.variantLabel,
       image: item.image,
       currencyCode: item.currencyCode ?? 'USD',
       quantity,

@@ -42,6 +42,7 @@ import type {
   ShopifyCartDeliveryGroup,
   ShopifyCartDeliveryOption,
 } from '@/lib/shopify/types';
+import { variantDescriptor } from '@/lib/product';
 
 /**
  * Map a Shopify product node to the domain Product type.
@@ -191,8 +192,8 @@ function mapOptions(variants: ShopifyProductVariant[], featuredImageUrl?: string
 //   - CartLine.merchandiseId  ← merchandise.id (the ProductVariant GID — used
 //                               only to CREATE a line)
 //   - CartLine.price         ← cost.amountPerQuantity.amount (display-only)
-//   - CartLine.size          ← the 'Size' selectedOption value, or 'OS' when
-//                               the variant has no Size option (one-size items)
+//   - CartLine.variantLabel  ← all selectedOptions values joined ("Black / large"),
+//                               skipping a lone 'Title' group; 'OS' when none remain
 //   - CartLine.image         ← merchandise.image?.url ?? ''
 //   - Cart.totalQuantity     ← node.totalQuantity (sum of line quantities —
 //                               feeds the bag badge, NOT lines.length)
@@ -201,16 +202,16 @@ function mapOptions(variants: ShopifyProductVariant[], featuredImageUrl?: string
 // ---------------------------------------------------------------------------
 
 /**
- * Extract the display size from a cart line's merchandise variant.
+ * Build the display descriptor for a cart line from its merchandise variant.
  *
- * Mirrors the product adapter's convention: use the `Size` selectedOption value
- * when present; otherwise fall back to `'OS'` for one-size-fits-all products.
- * Lookup is case-sensitive on the option `name` — if Shopify ever returns a
- * differently-cased option name (e.g. "size"), this is the one place to fix.
+ * Delegates to the shared `variantDescriptor` (lib/product.ts) so the cart line
+ * label and the PDP's optimistic `variantLabel` are produced by ONE function and
+ * can never drift — the optimistic line and the reconciled server line are
+ * byte-identical, so there is no flicker on reconcile. See `variantDescriptor`
+ * for the join / 'Title' skip / 'OS' fallback rules.
  */
-function lineSize(merchandise: ShopifyCartMerchandiseVariant): string {
-  const size = merchandise.selectedOptions.find((o) => o.name === 'Size');
-  return size ? size.value : 'OS';
+function lineLabel(merchandise: ShopifyCartMerchandiseVariant): string {
+  return variantDescriptor(merchandise.selectedOptions);
 }
 
 /**
@@ -228,7 +229,7 @@ export function mapCartLine(node: ShopifyCartLine): CartLine {
     merchandiseId: variant.id,
     name: variant.product.title,
     price: Number(node.cost.amountPerQuantity.amount),
-    size: lineSize(variant),
+    variantLabel: lineLabel(variant),
     quantity: node.quantity,
     image: variant.image?.url ?? '',
     currencyCode: node.cost.amountPerQuantity.currencyCode,

@@ -131,8 +131,8 @@ export const emptyCartNode: ShopifyCartNode = {
 /**
  * A cart line whose merchandise has NO image (`image: null`) — tests the image
  * fallback to '' so the drawer never crashes on a missing variant image. Also
- * uses a variant with no `Size` selectedOption (a "Title / Default Title" item),
- * exercising the `lineSize` `'OS'` fallback.
+ * uses a "Title / Default Title" (single-variant) item, exercising the
+ * `lineLabel` `'OS'` fallback (a lone 'Title' option is skipped).
  */
 export const nullImageCartLine: ShopifyCartLine = {
   id: 'gid://shopify/CartLine/noimg789',

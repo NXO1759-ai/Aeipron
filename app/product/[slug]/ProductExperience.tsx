@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import { useCart } from '@/store/use-cart';
-import { resolveSelectedVariant } from '@/lib/product';
+import { resolveSelectedVariant, resolvePreviewVariant, variantDescriptor } from '@/lib/product';
 import { RichText } from '@/components/RichText';
 import type { Product, ProductOption } from '@/lib/types';
 
@@ -17,12 +17,14 @@ const NO_CONTENT_MESSAGE = 'No content available yet.';
 //
 // Owns the per-option-group selection state and renders BOTH the gallery
 // (left) and the buybox (right) so they share one source of truth. The gallery's
-// active image follows the selected variant — exactly like the price — and
-// falls back to the first product image (or a placeholder) when no variant is
-// selected or the variant has no image.
+// active image follows the PARTIAL selection via `resolvePreviewVariant` (it
+// reacts to the first color pick, before every group is chosen), while the
+// price + cart merchandiseId use `resolveSelectedVariant` (the exact, in-stock
+// variant — needs every group selected). Both fall back to the first product
+// image (or a placeholder) when nothing is selected or no image is available.
 //
-// The selection → variant → image/price/merchandiseId chain is pure
-// (`resolveSelectedVariant`), so the gallery and the buybox can never disagree.
+// The selection → preview/selected variant → image/price/merchandiseId chain is
+// pure, so the gallery and the buybox can never disagree.
 //
 // Hydration: initial render uses an empty selection → active image is
 // `product.images[0]`, which matches the server render (no mismatch). The
@@ -40,25 +42,38 @@ export function ProductExperience({ product }: { product: Product }) {
   const selectedVariant = resolveSelectedVariant(product, selections);
   const selectedVariantId = selectedVariant?.id ?? null;
   const selectedVariantPrice = selectedVariant?.price ?? null;
+  // Preview variant for the gallery: matches the PARTIAL selection (wildcards
+  // on unselected groups, ignores availability) so the image reacts to the
+  // first color pick — without waiting for every group to be selected (which
+  // the cart-add resolver requires). Null only when nothing is selected.
+  const previewVariant = resolvePreviewVariant(product, selections);
 
-  // Active image: a manually-browsed thumbnail wins, then the selected variant's
-  // image, then the first product image. '' only when the product has no images
-  // AND the variant has none — the gallery renders a placeholder then.
+  // Active image: a manually-browsed thumbnail wins, then the preview variant's
+  // image (reflects the selection so far), then the first product image. '' only
+  // when the product has no images AND no variant has one — the gallery renders a
+  // placeholder then.
   const activeImage =
     manualIndex != null
       ? product.images[manualIndex] ?? ''
-      : selectedVariant?.image || product.images[0] || '';
+      : previewVariant?.image || product.images[0] || '';
 
   const handleAddToCart = async () => {
-    if (!selectedVariantId) return;
+    if (!selectedVariant) return;
+    // Variant descriptor shown in the cart: built from the RESOLVED variant's
+    // own selectedOptions via the same `variantDescriptor` the adapter uses for
+    // mapCartLine — so the optimistic line and the reconciled server line are
+    // byte-identical and never flicker. Reading from selectedVariant (not
+    // product.options / selections) avoids any cross-variant ordering
+    // assumption: the server labels the same variant from the same field.
+    const variantLabel = variantDescriptor(selectedVariant.selectedOptions);
     // The browser never sends a price — `price` here is display-only (the
     // optimistic line in the cart cache) and uses the SELECTED variant's price.
     await addItem({
-      merchandiseId: selectedVariantId,
+      merchandiseId: selectedVariant.id,
       name: product.name,
-      price: selectedVariantPrice ?? product.price,
-      size: Object.values(selections).join(' / '),
-      image: selectedVariant?.image || product.images[0] || '',
+      price: selectedVariant.price,
+      variantLabel,
+      image: selectedVariant.image || product.images[0] || '',
       currencyCode: 'USD',
     });
   };
