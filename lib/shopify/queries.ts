@@ -170,6 +170,30 @@ export const PRODUCT_BY_HANDLE_QUERY = `#graphql
           altText
         }
       }
+      # Option groups with merchant-configured swatches (color hex + texture
+      # image). Selected on the DETAIL query only — collection cards (which use
+      # the shared ProductFields fragment) don't pay for it. swatch.image is a
+      # Media union; we resolve it to a MediaImage and select its inner
+      # image { url }. swatch.color is the Storefront Color scalar (a hex
+      # string). Both are nullable — the adapter threads only what's present and
+      # resolveSwatch (lib/color.ts) falls back to a name→hex color, so colors
+      # render even with zero Shopify Admin swatch setup.
+      options {
+        name
+        optionValues {
+          name
+          swatch {
+            color
+            image {
+              ... on MediaImage {
+                image {
+                  url
+                }
+              }
+            }
+          }
+        }
+      }
       # Custom product metafields (Rich Text). These live in the 'custom'
       # namespace and are read here — on the DETAIL query only — so collection
       # cards (which use the shared ProductFields fragment) don't pay for them.
@@ -186,6 +210,34 @@ export const PRODUCT_BY_HANDLE_QUERY = `#graphql
       }
       productSizing: metafield(namespace: "custom", key: "product_sizing") {
         value
+      }
+    }
+  }
+  ${PRODUCT_FRAGMENT}
+`;
+
+/**
+ * Operation 1c — all products (Shop page).
+ *
+ * Fetches every product in the store (up to the Storefront `first: 250` max)
+ * for the `/shop` grid. Each card reuses the shared `ProductFields` fragment
+ * so it shares the exact same adapter path as the collection + detail queries
+ * (the card renders featuredImage → name → price range). `description` is
+ * selected truncated inline because the fragment deliberately omits it and
+ * `mapProduct` reads it with no fallback.
+ *
+ * Deliberately does NOT select `options`/`swatch` or the `custom` metafields —
+ * those are PDP-only concerns (see PRODUCT_BY_HANDLE_QUERY). Keeps the shop
+ * payload lean, mirroring the collection grid.
+ *
+ * Named operation `Products` for Shopify query tracking. Takes no variables.
+ */
+export const PRODUCTS_QUERY = `#graphql
+  query Products {
+    products(first: 250) {
+      nodes {
+        ...ProductFields
+        description(truncateAt: 200)
       }
     }
   }

@@ -20,12 +20,14 @@ import {
   COLLECTION_LIST_QUERY,
   COLLECTION_BY_HANDLE_QUERY,
   PRODUCT_BY_HANDLE_QUERY,
+  PRODUCTS_QUERY,
 } from '@/lib/shopify/queries';
 import { mapProduct, mapCollectionSummary } from '@/lib/shopify/adapter';
 import type {
   ShopifyCollectionsResponse,
   ShopifyCollectionByHandleResponse,
   ShopifyProductByHandleResponse,
+  ShopifyProductsResponse,
 } from '@/lib/shopify/types';
 
 // ---------------------------------------------------------------------------
@@ -77,6 +79,13 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
     { handle: slug },
   );
   return data.product ? mapProduct(data.product) : null;
+}
+
+// All products for the Shop page. Decoupled from collections so the shop grid
+// shows every available product regardless of how the merchant groups them.
+export async function getAllProducts(): Promise<Product[]> {
+  const data = await shopifyRequest<ShopifyProductsResponse>(PRODUCTS_QUERY);
+  return data.products.nodes.map(mapProduct);
 }
 
 export function getOrganizer(id: string): Organizer | null {

@@ -22,8 +22,8 @@ export default function Home() {
           <h1 className="font-inter text-5xl md:text-7xl lg:text-9xl font-medium text-apeiron-ivory uppercase tracking-tighter mb-12 drop-shadow-2xl">
             Everyday Mastery
           </h1>
-          <Link 
-            href="/collection" 
+          <Link
+            href="/shop"
             className="bg-transparent border border-apeiron-ivory text-apeiron-ivory px-12 py-5 uppercase tracking-widest font-bold text-sm transition-all duration-[600ms] ease-[cubic-bezier(0.25,1,0.5,1)] hover:bg-apeiron-ivory hover:text-apeiron-black"
           >
             Explore The Core

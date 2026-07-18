@@ -38,6 +38,7 @@ describe('lib/catalog exports (Phase 3 cleanup)', () => {
     expect(typeof catalog.getCollections).toBe('function');
     expect(typeof catalog.getCollectionByHandle).toBe('function');
     expect(typeof catalog.getProductBySlug).toBe('function');
+    expect(typeof catalog.getAllProducts).toBe('function');
     expect(typeof catalog.getOrganizer).toBe('function');
     expect(typeof catalog.getOrganizerSummaries).toBe('function');
   });

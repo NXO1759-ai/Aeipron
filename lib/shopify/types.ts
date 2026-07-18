@@ -47,6 +47,30 @@ export interface ShopifyProductPriceRange {
 }
 
 /**
+ * The visual swatch Shopify attaches to a `ProductOptionValue` (a color or a
+ * texture/pattern image). `color` is the Storefront `Color` scalar — comes over
+ * the wire as a hex string (e.g. "#1a2b3c"), nullable. `image` is a `Media`
+ * union; we resolve it to a MediaImage and select its inner `image { url }`,
+ * so here it carries just `{ url }` (or null when the swatch has no image).
+ */
+export interface ShopifyProductOptionValueSwatch {
+  color: string | null;
+  image: { url: string } | null;
+}
+
+/** A single value within a Shopify product option (e.g. "Red" for "Color"). */
+export interface ShopifyProductOptionValue {
+  name: string;
+  swatch?: ShopifyProductOptionValueSwatch | null;
+}
+
+/** A Shopify product option group (e.g. { name: "Color", optionValues: [...] }). */
+export interface ShopifyProductOption {
+  name: string;
+  optionValues: ShopifyProductOptionValue[];
+}
+
+/**
  * A single product node as returned by the Storefront API.
  * `images` is optional — only present on the PRODUCT_BY_HANDLE_QUERY (detail
  * page). Collection product cards (COLLECTION_BY_HANDLE_QUERY) return
@@ -61,6 +85,11 @@ export interface ShopifyProductNode {
   images?: { nodes: ShopifyImage[] };
   variants: { nodes: ShopifyProductVariant[] };
   priceRange: ShopifyProductPriceRange;
+  // Selected ONLY on the detail query (PRODUCT_BY_HANDLE_QUERY). Carries the
+  // merchant-configured `swatch` per option value so the color picker can render
+  // visual color dots. Absent on collection-card nodes (the shared fragment
+  // does not select `options`), so the adapter treats it as optional.
+  options?: ShopifyProductOption[];
   // Selected ONLY on the detail query (aliased `metafield(...)` in the `custom`
   // namespace). Each is the Storefront `Metafield` shape (`{ value }`) or null;
   // `value` is a `rich_text` JSON string. Absent on collection-card nodes.
@@ -91,6 +120,11 @@ export interface ShopifyCollectionByHandleResponse {
 /** Response shape for the `product(handle:)` query (PRODUCT_BY_HANDLE_QUERY). */
 export interface ShopifyProductByHandleResponse {
   product: ShopifyProductNode | null;
+}
+
+/** Response shape for the `products(first:)` query (PRODUCTS_QUERY — Shop page). */
+export interface ShopifyProductsResponse {
+  products: { nodes: ShopifyProductNode[] };
 }
 
 // ---------------------------------------------------------------------------

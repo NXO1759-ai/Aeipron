@@ -35,6 +35,7 @@ import type {
 import type {
   ShopifyProductNode,
   ShopifyProductVariant,
+  ShopifyProductOption,
   ShopifyCollectionNode,
   ShopifyCartNode,
   ShopifyCartLine,
@@ -55,7 +56,7 @@ export function mapProduct(node: ShopifyProductNode): Product {
     priceMax: Number(node.priceRange.maxVariantPrice.amount),
     description: node.description,
     images: mapImages(node),
-    options: mapOptions(node.variants.nodes, node.featuredImage?.url),
+    options: mapOptions(node.variants.nodes, node.featuredImage?.url, node.options),
     // Full variant matrix — the source of truth for resolving the exact variant
     // to add to the cart (see resolveSelectedVariant). Each variant carries its
     // GID, availability, full selectedOptions (so a multi-dimension selection
@@ -132,8 +133,20 @@ function mapImages(node: ShopifyProductNode): string[] {
  * keeps the selector safe and non-blocking for the single-dimension catalog.
  *
  * Groups and values are returned in first-seen order — do not sort.
+ *
+ * `shopifyOptions` (the `options` connection with per-value `swatch` data) is
+ * optional — only the DETAIL query selects it. When present, the merchant's
+ * `swatch.color` / `swatch.image` are threaded onto the matching
+ * `ProductOptionValue` by `(name, value)` (case-sensitive, per Shopify). When
+ * absent (collection-card path), `colorHex` / `swatchImage` stay undefined and
+ * `resolveSwatch` (lib/color.ts) falls back to a name→hex color so the picker
+ * still renders — see lib/color.ts.
  */
-function mapOptions(variants: ShopifyProductVariant[], featuredImageUrl?: string): ProductOption[] {
+function mapOptions(
+  variants: ShopifyProductVariant[],
+  featuredImageUrl?: string,
+  shopifyOptions?: ShopifyProductOption[],
+): ProductOption[] {
   // name → { values: Map<value, {inStock, price}> } preserving insertion order.
   const groups = new Map<string, Map<string, ProductOptionValue>>();
 
@@ -164,6 +177,35 @@ function mapOptions(variants: ShopifyProductVariant[], featuredImageUrl?: string
         if (variantPrice < existing.price) {
           existing.price = variantPrice;
           existing.image = variantImage;
+        }
+      }
+    }
+  }
+
+  // Thread merchant-configured swatch data onto the matching option values.
+  // Builds a name → value → { colorHex, swatchImage } lookup so the per-variant
+  // loop above stays the single source of grouping/order; the swatch is just
+  // stamped on at the end. (case-sensitive name+value matching, per Shopify.)
+  if (shopifyOptions && shopifyOptions.length > 0) {
+    const swatchByValue = new Map<string, Map<string, { colorHex?: string; swatchImage?: string }>>();
+    for (const opt of shopifyOptions) {
+      let inner = swatchByValue.get(opt.name);
+      if (!inner) { inner = new Map(); swatchByValue.set(opt.name, inner); }
+      for (const v of opt.optionValues) {
+        inner.set(v.name, {
+          colorHex: v.swatch?.color ?? undefined,
+          swatchImage: v.swatch?.image?.url ?? undefined,
+        });
+      }
+    }
+    for (const [name, valueMap] of groups) {
+      const inner = swatchByValue.get(name);
+      if (!inner) continue;
+      for (const [value, optionValue] of valueMap) {
+        const sw = inner.get(value);
+        if (sw) {
+          if (sw.colorHex !== undefined) optionValue.colorHex = sw.colorHex;
+          if (sw.swatchImage !== undefined) optionValue.swatchImage = sw.swatchImage;
         }
       }
     }

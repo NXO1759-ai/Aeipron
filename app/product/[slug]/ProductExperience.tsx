@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import Image from 'next/image';
 import { useCart } from '@/store/use-cart';
 import { resolveSelectedVariant, resolvePreviewVariant, variantDescriptor } from '@/lib/product';
 import { RichText } from '@/components/RichText';
+import { ColorSwatchGroup, isColorGroup } from '@/components/product/ColorSwatch';
 import type { Product, ProductOption } from '@/lib/types';
 
 /** Shown inside a disclosure when its metafield has no value yet — the store
@@ -79,10 +80,12 @@ export function ProductExperience({ product }: { product: Product }) {
   };
 
   // Selecting an option value resets manual browsing so the variant image wins.
-  const selectOption = (name: string, value: string) => {
+  // useCallback'd so it's a stable identity across re-renders — the memoized
+  // ColorSwatchGroup / ColorSwatch then only re-render on a real prop change.
+  const selectOption = useCallback((name: string, value: string) => {
     setSelections((prev) => ({ ...prev, [name]: value }));
     setManualIndex(null);
-  };
+  }, []);
 
   // Price shown live: the selected variant's price once a valid in-stock
   // selection is made, otherwise the product's min–max range (or single price).
@@ -154,54 +157,67 @@ export function ProductExperience({ product }: { product: Product }) {
 
             <p className="text-sm text-ui-concrete leading-relaxed mb-12">{product.description}</p>
 
-            {product.options.map((group: ProductOption) => (
-              <div key={group.name} className="mb-10">
-                <div className="mb-6 flex justify-between items-end">
-                  <span className="uppercase tracking-widest text-sm font-bold">Select {group.name}</span>
-                  {/* Size Guide button — commented out per client direction.
-                      Kept here (not deleted) so it can be re-wired to a size
-                      chart later. Re-enable by uncommenting the JSX below.
-                  <button
-                    type="button"
-                    className="text-ui-concrete hover:text-primary-cream underline-offset-4 hover:underline text-xs tracking-widest uppercase transition-all"
-                  >
-                    {group.name} Guide
-                  </button>
-                  */}
-                </div>
+            {product.options.map((group: ProductOption) =>
+              // The Color group renders as visual color checkpoints (round
+              // dots); every other group (Size, etc.) keeps the text buttons.
+              // Both drive the SAME selections Record + resolveSelectedVariant,
+              // so the cart still resolves the exact variant GID.
+              isColorGroup(group.name) ? (
+                <ColorSwatchGroup
+                  key={group.name}
+                  group={group}
+                  selectedValue={selections[group.name]}
+                  onSelect={selectOption}
+                />
+              ) : (
+                <div key={group.name} className="mb-10">
+                  <div className="mb-6 flex justify-between items-end">
+                    <span className="uppercase tracking-widest text-sm font-bold">Select {group.name}</span>
+                    {/* Size Guide button — commented out per client direction.
+                        Kept here (not deleted) so it can be re-wired to a size
+                        chart later. Re-enable by uncommenting the JSX below.
+                    <button
+                      type="button"
+                      className="text-ui-concrete hover:text-primary-cream underline-offset-4 hover:underline text-xs tracking-widest uppercase transition-all"
+                    >
+                      {group.name} Guide
+                    </button>
+                    */}
+                  </div>
 
-                <div className="flex flex-wrap gap-3">
-                  {group.values.map((v) => {
-                    const isSelected = selections[group.name] === v.value;
-                    return (
-                      <button
-                        type="button"
-                        key={v.value}
-                        disabled={!v.inStock}
-                        aria-pressed={isSelected}
-                        aria-label={`${group.name} ${v.value}${!v.inStock ? ', out of stock' : ''}`}
-                        onClick={() => selectOption(group.name, v.value)}
-                        className={`
-                          min-w-[3.5rem] px-4 py-3 text-sm font-bold uppercase tracking-widest transition-colors relative
-                          ${!v.inStock ? 'text-ui-concrete border-ui-concrete/30 cursor-not-allowed bg-transparent' : 'cursor-pointer'}
-                          ${v.inStock && !isSelected ? 'border-primary-cream/50 text-primary-cream hover:bg-primary-cream/10 border' : ''}
-                          ${isSelected ? 'bg-primary-cream text-primary-obsidian border border-primary-cream' : ''}
-                          ${!v.inStock ? 'border border-ui-concrete/30 overflow-hidden' : ''}
-                        `}
-                      >
-                        {v.value}
-                        {!v.inStock && (
-                          <span
-                            className="absolute top-1/2 left-0 w-full h-[1px] bg-ui-concrete/50 transform -translate-y-1/2 -rotate-45"
-                            aria-hidden="true"
-                          />
-                        )}
-                      </button>
-                    );
-                  })}
+                  <div className="flex flex-wrap gap-3">
+                    {group.values.map((v) => {
+                      const isSelected = selections[group.name] === v.value;
+                      return (
+                        <button
+                          type="button"
+                          key={v.value}
+                          disabled={!v.inStock}
+                          aria-pressed={isSelected}
+                          aria-label={`${group.name} ${v.value}${!v.inStock ? ', out of stock' : ''}`}
+                          onClick={() => selectOption(group.name, v.value)}
+                          className={`
+                            min-w-[3.5rem] px-4 py-3 text-sm font-bold uppercase tracking-widest transition-colors relative
+                            ${!v.inStock ? 'text-ui-concrete border-ui-concrete/30 cursor-not-allowed bg-transparent' : 'cursor-pointer'}
+                            ${v.inStock && !isSelected ? 'border-primary-cream/50 text-primary-cream hover:bg-primary-cream/10 border' : ''}
+                            ${isSelected ? 'bg-primary-cream text-primary-obsidian border border-primary-cream' : ''}
+                            ${!v.inStock ? 'border border-ui-concrete/30 overflow-hidden' : ''}
+                          `}
+                        >
+                          {v.value}
+                          {!v.inStock && (
+                            <span
+                              className="absolute top-1/2 left-0 w-full h-[1px] bg-ui-concrete/50 transform -translate-y-1/2 -rotate-45"
+                              aria-hidden="true"
+                            />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ),
+            )}
 
             <button
               type="button"

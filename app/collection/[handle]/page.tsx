@@ -1,7 +1,7 @@
-import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getCollectionByHandle } from '@/lib/catalog';
+import { ProductCard } from '@/components/ProductCard';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,29 +49,7 @@ export default async function CollectionDetailPage({
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-12 mb-16">
             {collection.products.map((product) => (
-              <Link href={`/product/${product.id}`} key={product.id} className="group cursor-pointer">
-                <div className="relative aspect-[3/4] bg-ui-concrete/10 mb-4 overflow-hidden">
-                  {product.images[0] && (
-                    <Image
-                      src={product.images[0]}
-                      alt={product.name}
-                      fill
-                      className="object-cover transition-transform duration-[800ms] ease-[cubic-bezier(0.25,1,0.5,1)] group-hover:scale-105"
-                    />
-                  )}
-                  <div className="absolute inset-0 bg-apeiron-black/0 group-hover:bg-apeiron-black/20 transition-colors duration-500 ease-[cubic-bezier(0.25,1,0.5,1)]" />
-                </div>
-                <div className="flex justify-between items-start mt-4">
-                  <h3 className="font-bold uppercase tracking-wider text-sm leading-tight max-w-[75%] text-ui-concrete group-hover:text-apeiron-ivory transition-colors duration-300">
-                    {product.name}
-                  </h3>
-                  <span className="font-mono text-ui-concrete">
-                    {product.priceMax > product.price
-                      ? `$${product.price}–${product.priceMax}`
-                      : `$${product.price}`}
-                  </span>
-                </div>
-              </Link>
+              <ProductCard key={product.id} product={product} />
             ))}
           </div>
         )}
