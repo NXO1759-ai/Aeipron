@@ -244,6 +244,48 @@ export const PRODUCTS_QUERY = `#graphql
   ${PRODUCT_FRAGMENT}
 `;
 
+/**
+ * Operation 2b — the Captain Shipping Protection product (`shipping-protection`).
+ *
+ * Fetches the protection product by handle and ALL of its variants (up to the
+ * Storefront `first: 250` max — the live product has 100, so one call, no
+ * pagination). The resolver (lib/shipping-protection/ladder.ts) only needs each
+ * variant's `id` (the ProductVariant GID passed to `cartLinesAdd`), `title`
+ * (Captain marks the default-fixed-price fallback with a leading `*`), and
+ * `price` (the fee tier). Deliberately does NOT select `selectedOptions`,
+ * `image`, `description`, or metafields — keeps the payload lean and decoupled
+ * from PDP concerns.
+ *
+ * Does NOT reuse the shared `ProductFields` fragment: that fragment caps
+ * `variants(first: 50)` (line 49), which is too few for the 100-variant
+ * protection product, and selects PDP-only fields the resolver doesn't need.
+ *
+ * The `$handle` variable is typed `String!` and passed separately (not
+ * interpolated) — same injection-safety / deduplication convention as the other
+ * handle queries. Named operation `ShippingProtectionProduct` for Shopify query
+ * tracking.
+ */
+export const SHIPPING_PROTECTION_QUERY = `#graphql
+  query ShippingProtectionProduct($handle: String!) {
+    product(handle: $handle) {
+      id
+      handle
+      title
+      variants(first: 250) {
+        nodes {
+          id
+          title
+          availableForSale
+          price {
+            amount
+            currencyCode
+          }
+        }
+      }
+    }
+  }
+`;
+
 // ---------------------------------------------------------------------------
 // Shopify Cart API operations (Phase 2 — operations 5–9).
 //

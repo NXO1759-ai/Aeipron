@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import { Header } from './Header';
 import { CartDrawer } from './CartDrawer';
 import { CartHydrator } from './CartHydrator';
+import { ProtectionHydrator } from './ProtectionHydrator';
 import { Footer } from './Footer';
 
 export function LayoutWrapper({ children }: { children: React.ReactNode }) {
@@ -19,6 +20,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
       </main>
       {!isCheckout && !isHome && <Footer />}
       {!isCheckout && <CartHydrator />}
+      {!isCheckout && <ProtectionHydrator />}
       {!isCheckout && <CartDrawer />}
     </>
   );

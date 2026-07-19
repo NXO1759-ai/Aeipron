@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useCart } from '@/store/use-cart';
+import { useCart, isProtectionLine, selectMerchandiseCount } from '@/store/use-cart';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { formatCurrency } from '@/lib/utils';
 import { CartLineItem } from '@/components/CartLineItem';
+import { ShippingProtectionToggle } from '@/components/ShippingProtectionToggle';
 import { useCheckoutRedirect } from '@/hooks/use-checkout-redirect';
 
 // ---------------------------------------------------------------------------
@@ -29,13 +30,13 @@ import { useCheckoutRedirect } from '@/hooks/use-checkout-redirect';
 export function CartView() {
   const {
     items,
-    totalQuantity,
     subtotalAmount,
     totalAmount,
     totalAmountEstimated,
     currencyCode,
     status,
     error,
+    protectionVariants,
     setQuantity,
     removeItem,
   } = useCart();
@@ -46,14 +47,19 @@ export function CartView() {
   // Pre-hydration baseline: render zero so SSR and the first client paint
   // agree. Once hydrated, the store reflects the Shopify cart (rehydrated by
   // CartHydrator on mount).
-  const lines = hydrated ? items : [];
-  const count = hydrated ? totalQuantity : 0;
+  const allLines = hydrated ? items : [];
+  // The protection line is represented by the toggle, NOT a cart row — filter
+  // it out. The bag count counts merchandise only.
+  const lines = allLines.filter((i) => !isProtectionLine(i, protectionVariants));
+  const count = hydrated ? selectMerchandiseCount(allLines, protectionVariants) : 0;
   const subtotal = hydrated ? formatCurrency(subtotalAmount, currencyCode) : formatCurrency(0, currencyCode);
   const total = hydrated ? formatCurrency(totalAmount, currencyCode) : formatCurrency(0, currencyCode);
 
   // Empty state — only trust it once hydrated (SSR / pre-hydration always has
   // a zero baseline, which is NOT "your bag is empty"; it just isn't loaded).
-  const isEmpty = hydrated && lines.length === 0;
+  // Base on ALL lines (incl. protection) so a lone protection line still shows
+  // the order summary + toggle (to turn it off) rather than the empty state.
+  const isEmpty = hydrated && allLines.length === 0;
 
   if (isEmpty) {
     return (
@@ -62,13 +68,13 @@ export function CartView() {
           Your bag is empty
         </h2>
         <p className="text-ui-concrete text-sm mb-8 max-w-md">
-          Nothing in here yet. Explore the collection and add a piece to your bag.
+          Nothing in here yet. Explore the shop and add a piece to your bag.
         </p>
         <Link
-          href="/collection"
+          href="/shop"
           className="border border-ui-concrete px-8 py-3 text-sm uppercase tracking-widest font-bold text-primary-cream hover:bg-primary-cream hover:text-primary-obsidian transition-colors"
         >
-          Explore the collection
+          Continue Shopping
         </Link>
       </div>
     );
@@ -104,6 +110,8 @@ export function CartView() {
           <h2 className="text-sm font-bold uppercase tracking-widest text-primary-cream mb-6">
             Order summary
           </h2>
+
+          <ShippingProtectionToggle />
 
           <dl className="space-y-3 text-sm">
             <div className="flex justify-between text-ui-concrete">
@@ -156,7 +164,7 @@ export function CartView() {
           )}
 
           <Link
-            href="/collection"
+            href="/shop"
             className="mt-3 block w-full py-3 text-center uppercase tracking-widest text-xs font-bold text-ui-concrete hover:text-primary-cream transition-colors"
           >
             Continue shopping

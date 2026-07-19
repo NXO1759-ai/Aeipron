@@ -1,12 +1,13 @@
 'use client';
 
-import { useCart } from '@/store/use-cart';
+import { useCart, isProtectionLine, selectMerchandiseCount } from '@/store/use-cart';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { formatCurrency } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { X } from 'lucide-react';
 import Link from 'next/link';
 import { CartLineItem } from '@/components/CartLineItem';
+import { ShippingProtectionToggle } from '@/components/ShippingProtectionToggle';
 import { useCheckoutRedirect } from '@/hooks/use-checkout-redirect';
 
 export function CartDrawer() {
@@ -14,10 +15,9 @@ export function CartDrawer() {
     isOpen,
     closeCart,
     items,
-    totalQuantity,
+    protectionVariants,
     subtotalAmount,
     currencyCode,
-    status,
     error,
     setQuantity,
     removeItem,
@@ -27,8 +27,13 @@ export function CartDrawer() {
     useCheckoutRedirect();
 
   // Before hydration, render the empty/zero baseline so SSR and client agree.
-  const count = hydrated ? totalQuantity : 0;
-  const lines = hydrated ? items : [];
+  const allLines = hydrated ? items : [];
+  // The protection line is represented by the toggle, NOT a cart row — filter
+  // it out of the line list. The bag count counts merchandise only (protection
+  // is a service opt-in, not a bag item), so a cart with only protection shows
+  // "Bag (0)" + the toggle instead of a phantom item.
+  const lines = allLines.filter((i) => !isProtectionLine(i, protectionVariants));
+  const count = hydrated ? selectMerchandiseCount(allLines, protectionVariants) : 0;
   const subtotal = hydrated ? formatCurrency(subtotalAmount, currencyCode) : formatCurrency(0, currencyCode);
 
   return (
@@ -72,7 +77,7 @@ export function CartDrawer() {
 
             {/* Items */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {lines.length === 0 ? (
+              {allLines.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center text-ui-concrete">
                   <p className="mb-4">Your bag is empty.</p>
                   <button
@@ -96,13 +101,14 @@ export function CartDrawer() {
             </div>
 
             {/* Footer */}
-            {lines.length > 0 && (
+            {allLines.length > 0 && (
               <div className="border-t border-ui-concrete/20 p-6 bg-primary-obsidian">
                 {error && (
                   <p role="alert" className="mb-4 text-accent-energy text-xs uppercase tracking-widest font-bold">
                     {error}
                   </p>
                 )}
+                <ShippingProtectionToggle />
                 <div className="flex justify-between items-center mb-6 text-primary-cream font-bold tracking-wider uppercase">
                   <span>Subtotal</span>
                   <span className="font-mono">{subtotal}</span>

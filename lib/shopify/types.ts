@@ -127,6 +127,35 @@ export interface ShopifyProductsResponse {
   products: { nodes: ShopifyProductNode[] };
 }
 
+/**
+ * A single variant of the shipping-protection product, as selected by
+ * SHIPPING_PROTECTION_QUERY. Only the fields the resolver needs: the variant
+ * GID (`id`), the tier title (`title` — Captain marks the default-fixed-price
+ * fallback with a leading `*`), availability, and the fee (`price`).
+ */
+export interface ShopifyShippingProtectionVariant {
+  id: string;
+  title: string;
+  availableForSale: boolean;
+  price: ShopifyMoneyV2;
+}
+
+/**
+ * Response shape for `product(handle:)` for the shipping-protection product
+ * (SHIPPING_PROTECTION_QUERY). `product` is null when the product is not visible
+ * to the Storefront API (not published to the app's sales channel / UNLISTED).
+ * `variants` uses the `nodes` connection (like Product.variants, unlike
+ * Cart.lines which is edge-based).
+ */
+export interface ShopifyShippingProtectionResponse {
+  product: {
+    id: string;
+    handle: string;
+    title: string;
+    variants: { nodes: ShopifyShippingProtectionVariant[] };
+  } | null;
+}
+
 // ---------------------------------------------------------------------------
 // Raw Shopify Cart API response shapes (Phase 2 — operations 5–9).
 //

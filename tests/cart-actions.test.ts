@@ -44,10 +44,24 @@ vi.mock('@/lib/cart-cookie', () => ({
   CART_COOKIE: 'aeipron-cart-id',
 }));
 
+// Mock the shipping-protection server read so getProtectionConfig never hits
+// Shopify (it is exercised directly in tests/shipping-protection-read.test.ts).
+vi.mock('@/lib/shipping-protection', () => ({
+  getProtectionConfig: vi.fn(),
+}));
+
 // The adapter (mapCart) is a real pure function — let it run on fixture-shaped
 // responses so we also assert the action returns the correctly-mapped Cart.
-const { getCart, addToCart, updateCartLine, removeCartLine, clearCart, getCheckoutUrl } =
-  await import('@/app/cart/actions');
+const {
+  getCart,
+  addToCart,
+  updateCartLine,
+  removeCartLine,
+  clearCart,
+  getCheckoutUrl,
+  getProtectionConfig,
+  swapShippingProtection,
+} = await import('@/app/cart/actions');
 const { shopifyRequest } = await import('@/lib/shopify/client');
 const { getCartId, setCartId, clearCartId } = await import('@/lib/cart-cookie');
 const {
@@ -59,21 +73,25 @@ const {
 } = await import('@/lib/shopify/queries');
 const { singleLineCartNode, emptyCartNode } = await import('./fixtures/cart-node');
 const { mapCart } = await import('@/lib/shopify/adapter');
+const { getProtectionConfig: readProtectionConfig } = await import('@/lib/shipping-protection');
 
 const CART_ID = 'gid://shopify/Cart/test0001?key=testkey';
 const MERCH_ID = 'gid://shopify/ProductVariant/46514157256901';
 const LINE_ID = 'gid://shopify/CartLine/abc123';
+const PROTECTION_MERCH_ID = 'gid://shopify/ProductVariant/10000000000010';
 
 const mockRequest = vi.mocked(shopifyRequest);
 const mockGetCartId = vi.mocked(getCartId);
 const mockSetCartId = vi.mocked(setCartId);
 const mockClearCartId = vi.mocked(clearCartId);
+const mockReadProtectionConfig = vi.mocked(readProtectionConfig);
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockRequest.mockReset();
   mockGetCartId.mockReset();
   mockGetCartId.mockResolvedValue(null);
+  mockReadProtectionConfig.mockReset();
 });
 
 // ---------------------------------------------------------------------------
@@ -292,6 +310,34 @@ describe('removeCartLine', () => {
     await expect(removeCartLine({ lineId: '' })).rejects.toThrow();
     expect(shopifyRequest).not.toHaveBeenCalled();
   });
+
+  it('treats "merchandise line … does not exist" as idempotent success (re-fetch, no throw)', async () => {
+    // The line is already gone (a prior/concurrent op removed it, or the cached
+    // line id is stale from an expired cart) — the desired end state. Instead of
+    // surfacing a 500, re-fetch the authoritative cart and return it.
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValueOnce({
+      cartLinesRemove: {
+        cart: null,
+        userErrors: [
+          { field: ['lineIds', '0'], message: 'The merchandise line with id 06a381d9-... does not exist.' },
+        ],
+      },
+    });
+    mockRequest.mockResolvedValueOnce({ cart: singleLineCartNode }); // the getCart re-fetch
+    const cart = await removeCartLine({ lineId: LINE_ID });
+    expect(cart).toEqual(mapCart(singleLineCartNode));
+    // Second call was the CART_GET_QUERY re-fetch.
+    expect(mockRequest.mock.calls[1][0]).toBe(CART_GET_QUERY);
+  });
+
+  it('still throws for a non-"does not exist" userError (a real failure)', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValueOnce({
+      cartLinesRemove: { cart: null, userErrors: [{ field: ['lineIds'], message: 'line not found' }] },
+    });
+    await expect(removeCartLine({ lineId: LINE_ID })).rejects.toThrow();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -375,6 +421,119 @@ describe('price invariant — no mutation payload ever contains a price', () => 
     mockRequest.mockResolvedValue({ cartLinesRemove: { cart: emptyCartNode, userErrors: [] } });
     await removeCartLine({ lineId: LINE_ID });
 
+    for (const [, vars] of mockRequest.mock.calls) {
+      const json = JSON.stringify(vars);
+      expect(json).not.toContain('"price"');
+      expect(json).not.toContain('"amount"');
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getProtectionConfig
+// ---------------------------------------------------------------------------
+
+describe('getProtectionConfig', () => {
+  it('delegates to the shipping-protection server read and returns its result', async () => {
+    mockReadProtectionConfig.mockResolvedValue({
+      variants: [{ id: PROTECTION_MERCH_ID, title: '4.03', price: 4.03 }],
+      rate: 0.02,
+    });
+    const cfg = await getProtectionConfig();
+    expect(mockReadProtectionConfig).toHaveBeenCalledTimes(1);
+    expect(cfg).toEqual({
+      variants: [{ id: PROTECTION_MERCH_ID, title: '4.03', price: 4.03 }],
+      rate: 0.02,
+    });
+  });
+
+  it('returns null when the protection product is not visible to the Storefront API', async () => {
+    mockReadProtectionConfig.mockResolvedValue(null);
+    const cfg = await getProtectionConfig();
+    expect(cfg).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// swapShippingProtection
+// ---------------------------------------------------------------------------
+
+describe('swapShippingProtection', () => {
+  it('removes the old protection line then adds the new variant (qty 1)', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValueOnce({ cartLinesRemove: { cart: emptyCartNode, userErrors: [] } });
+    mockRequest.mockResolvedValueOnce({ cartLinesAdd: { cart: singleLineCartNode, userErrors: [] } });
+    const cart = await swapShippingProtection({ oldLineId: LINE_ID, newMerchandiseId: PROTECTION_MERCH_ID });
+    // First call: remove the old line.
+    expect(mockRequest.mock.calls[0][0]).toBe(CART_LINES_REMOVE_MUTATION);
+    expect(mockRequest.mock.calls[0][1]).toEqual({ cartId: CART_ID, lineIds: [LINE_ID] });
+    // Second call: add the new variant, qty 1.
+    expect(mockRequest.mock.calls[1][0]).toBe(CART_LINES_ADD_MUTATION);
+    expect(mockRequest.mock.calls[1][1]).toEqual({
+      cartId: CART_ID,
+      lines: [{ merchandiseId: PROTECTION_MERCH_ID, quantity: 1 }],
+    });
+    expect(cart).toEqual(mapCart(singleLineCartNode));
+  });
+
+  it('throws and does NOT add the new variant when the remove fails (userErrors)', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValueOnce({
+      cartLinesRemove: { cart: null, userErrors: [{ field: ['lineIds'], message: 'line not found' }] },
+    });
+    await expect(
+      swapShippingProtection({ oldLineId: LINE_ID, newMerchandiseId: PROTECTION_MERCH_ID }),
+    ).rejects.toThrow();
+    // Only the remove call happened — the add never ran.
+    expect(mockRequest.mock.calls).toHaveLength(1);
+  });
+
+  it('proceeds to add the new tier when the old line is already gone ("does not exist")', async () => {
+    // The remove step's "merchandise line … does not exist" is idempotent
+    // success (the line is already gone), so the swap continues to add the new
+    // tier rather than aborting — no 500, cart ends with the new variant.
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValueOnce({
+      cartLinesRemove: {
+        cart: null,
+        userErrors: [
+          { field: ['lineIds', '0'], message: 'The merchandise line with id 06a381d9-... does not exist.' },
+        ],
+      },
+    });
+    mockRequest.mockResolvedValueOnce({ cart: singleLineCartNode }); // getCart re-fetch
+    mockRequest.mockResolvedValueOnce({ cartLinesAdd: { cart: singleLineCartNode, userErrors: [] } });
+    const cart = await swapShippingProtection({ oldLineId: LINE_ID, newMerchandiseId: PROTECTION_MERCH_ID });
+    expect(cart).toEqual(mapCart(singleLineCartNode));
+    // remove(rejected) → getCart re-fetch → add. The add still ran (new tier added).
+    const mutations = mockRequest.mock.calls.map((c) => c[0]);
+    expect(mutations).toContain(CART_LINES_ADD_MUTATION);
+  });
+
+  it('throws when the add fails after the remove (non-atomic — cart left without protection)', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValueOnce({ cartLinesRemove: { cart: emptyCartNode, userErrors: [] } });
+    mockRequest.mockResolvedValueOnce({
+      cartLinesAdd: { cart: null, userErrors: [{ field: ['lines'], message: 'variant unavailable' }] },
+    });
+    await expect(
+      swapShippingProtection({ oldLineId: LINE_ID, newMerchandiseId: PROTECTION_MERCH_ID }),
+    ).rejects.toThrow();
+    // Both calls ran (remove succeeded, add failed) — the store will re-hydrate.
+    expect(mockRequest.mock.calls).toHaveLength(2);
+  });
+
+  it('rejects an empty oldLineId or newMerchandiseId before any Shopify call', async () => {
+    await expect(swapShippingProtection({ oldLineId: '', newMerchandiseId: PROTECTION_MERCH_ID })).rejects.toThrow();
+    await expect(swapShippingProtection({ oldLineId: LINE_ID, newMerchandiseId: '' })).rejects.toThrow();
+    expect(shopifyRequest).not.toHaveBeenCalled();
+  });
+
+  it('never sends a price (trust invariant)', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValueOnce({ cartLinesRemove: { cart: emptyCartNode, userErrors: [] } });
+    mockRequest.mockResolvedValueOnce({ cartLinesAdd: { cart: singleLineCartNode, userErrors: [] } });
+    await swapShippingProtection({ oldLineId: LINE_ID, newMerchandiseId: PROTECTION_MERCH_ID });
     for (const [, vars] of mockRequest.mock.calls) {
       const json = JSON.stringify(vars);
       expect(json).not.toContain('"price"');

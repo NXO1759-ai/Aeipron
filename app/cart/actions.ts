@@ -42,7 +42,9 @@ import {
 } from '@/lib/shopify/queries';
 import { mapCart } from '@/lib/shopify/adapter';
 import { getCartId, setCartId, clearCartId } from '@/lib/cart-cookie';
+import { getProtectionConfig as readProtectionConfig } from '@/lib/shipping-protection';
 import type { Cart } from '@/lib/types';
+import type { ProtectionConfig } from '@/lib/shipping-protection/types';
 import type {
   ShopifyCartResponse,
   ShopifyCartCreateResponse,
@@ -199,14 +201,35 @@ export async function removeCartLine(input: { lineId: string }): Promise<Cart> {
   return removeCartLineInternal(cartId, [lineId]);
 }
 
-/** Internal: run cartLinesRemove for the given cart-line GIDs and map the result. */
+/**
+ * Internal: run cartLinesRemove for the given cart-line GIDs and map the result.
+ *
+ * IDEMPOTENT removal: a `userErrors` entry of "merchandise line … does not
+ * exist" means the line is already gone — the desired end state. This happens
+ * when an earlier/concurrent op already removed the line, or the cached line id
+ * is stale from an expired cart. Instead of surfacing a hard 500, re-fetch the
+ * authoritative cart and return it so the caller reconciles to the true state.
+ * (The store's serial mutation queue prevents the concurrent case in practice,
+ * but this keeps removal resilient at the action boundary regardless.)
+ */
 async function removeCartLineInternal(cartId: string, lineIds: string[]): Promise<Cart> {
   const data = await shopifyRequest<ShopifyCartLinesRemoveResponse>(CART_LINES_REMOVE_MUTATION, {
     cartId,
     lineIds,
   });
   const removed = data.cartLinesRemove;
-  throwOnUserErrors(removed.userErrors);
+  const errors = removed?.userErrors ?? [];
+  const alreadyGone =
+    errors.length > 0 && errors.every((e) => /does not exist/i.test(e?.message ?? ''));
+  if (alreadyGone) {
+    // Line is already absent — re-fetch the cart so the caller reconciles. If the
+    // cart itself expired too, surface the generic error so the store re-hydrates
+    // (to empty).
+    const cart = await getCart();
+    if (!cart) throw new Error(CART_ERROR_MESSAGE);
+    return cart;
+  }
+  throwOnUserErrors(errors);
   if (!removed.cart) {
     await clearCartId();
     throw new Error(CART_ERROR_MESSAGE);
@@ -231,4 +254,58 @@ export async function clearCart(): Promise<void> {
 export async function getCheckoutUrl(): Promise<string | null> {
   const cart = await getCart();
   return cart?.checkoutUrl ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Captain Shipping Protection actions.
+//
+// Protection is a real Shopify product variant (handle `shipping-protection`).
+// Opting in = `cartLinesAdd` of the correct price-laddered variant (qty 1); the
+// browser NEVER picks a variant id or sends a price — the variant id is
+// resolved server-side / from the server-shipped config and passed to the same
+// addToCart path as any product. These actions keep the trust invariants:
+//   - getProtectionConfig ships ONLY plain variant data + the rate (no token,
+//     no cart id, no Shopify raw shapes). It is the sole way protection config
+//     crosses to the client.
+//   - swapShippingProtection composes removeCartLine + addToCart (both already
+//     invariant-enforced) — it sends only lineId + merchandiseId + quantity.
+// ---------------------------------------------------------------------------
+
+/**
+ * Read the Captain protection config (available fee-tier variants + the
+ * merchant's percentage rate) and ship it to the client as plain serializable
+ * data. Returns `null` when the protection product is not visible to the
+ * Storefront API (not published / UNLISTED) or has no available variants — the
+ * store treats null as "protection unavailable" and the toggle renders nothing.
+ * Memoized per warm server process via lib/shipping-protection.
+ */
+export async function getProtectionConfig(): Promise<ProtectionConfig | null> {
+  return readProtectionConfig();
+}
+
+/**
+ * Swap the cart's protection line to a different fee tier — used when the cart
+ * subtotal crosses a tier boundary while protection is on (e.g. the buyer adds
+ * an item and the correct fee tier changes). Removes the old protection line,
+ * then adds the new variant (qty 1).
+ *
+ * NOT atomic: the Storefront API exposes no single "change a line's variant"
+ * operation, so this is a remove + add. If the add fails after the remove, the
+ * cart is left WITHOUT protection — the store catches the error and re-hydrates
+ * from the server, so the toggle reflects the true (off) state and the buyer can
+ * retry. Sends only `lineId` + `merchandiseId` + `quantity` — never a price.
+ */
+export async function swapShippingProtection(input: {
+  oldLineId: string;
+  newMerchandiseId: string;
+}): Promise<Cart> {
+  const oldLineId = String(input?.oldLineId ?? '');
+  const newMerchandiseId = String(input?.newMerchandiseId ?? '');
+  if (!oldLineId || !newMerchandiseId) throw new Error(CART_ERROR_MESSAGE);
+  // Remove the old protection line first; if this throws, do NOT add the new
+  // one (propagate so the store re-hydrates).
+  await removeCartLine({ lineId: oldLineId });
+  // Add the new tier (qty 1 — protection is always a single line). addToCart
+  // handles cart-create / expired-cart recovery transparently.
+  return addToCart({ merchandiseId: newMerchandiseId, quantity: 1 });
 }

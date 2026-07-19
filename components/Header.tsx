@@ -5,7 +5,7 @@ import { Menu, X, ShoppingBag } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { usePathname } from "next/navigation";
-import { useCart } from "@/store/use-cart";
+import { useCart, selectMerchandiseCount } from "@/store/use-cart";
 import { useHydrated } from "@/hooks/use-hydrated";
 
 export function Header() {
@@ -13,12 +13,15 @@ export function Header() {
   const pathname = usePathname();
   const isHome = pathname === "/";
 
-  const { totalQuantity, toggleCart } = useCart();
+  const { items, protectionVariants, toggleCart } = useCart();
   const hydrated = useHydrated();
-  // The badge reads the store's `totalQuantity` (sourced from Shopify's
-  // cart.totalQuantity) — the single source of truth. Gated behind
+  // The badge counts MERCHANDISE items only — the sum of quantities of all
+  // non-protection lines (still a sum of quantities, never `lines.length`).
+  // Captain shipping protection is a service opt-in shown as a toggle, not a
+  // bag item, so it must not inflate the badge (otherwise the bag shows "1"
+  // with no visible product when protection is the only line). Gated behind
   // `useHydrated` so the first client paint matches the server HTML (empty).
-  const itemCount = hydrated ? totalQuantity : 0;
+  const itemCount = hydrated ? selectMerchandiseCount(items, protectionVariants) : 0;
 
   // Collaborators is intentionally absent from the nav list (per client
   // direction). The /collaborators route + components are kept on disk for
