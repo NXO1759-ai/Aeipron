@@ -23,7 +23,7 @@ import { NewsletterForm } from './NewsletterForm';
 // ---------------------------------------------------------------------------
 
 const shopLinks = [
-  { label: 'Collection', href: '/collection' },
+  { label: 'Shop', href: '/shop' },
   { label: 'Our Story', href: '/story' },
 ];
 
@@ -179,6 +179,11 @@ export function Footer() {
             &copy; {year} Apeiron. All rights reserved.
           </p>
 
+          {/* Hidden per client direction — re-enable when explicitly requested.
+              Both are placeholder `href="#"` (no /privacy or /terms route exists
+              yet); uncomment the block below to surface them again. The wrapping
+              div is commented as a unit so the bottom bar's layout intent stays
+              on disk alongside the markup.
           <div className="flex items-center gap-6">
             <Link
               href="#"
@@ -193,6 +198,7 @@ export function Footer() {
               Terms of Service
             </Link>
           </div>
+          */}
         </div>
       </div>
     </footer>

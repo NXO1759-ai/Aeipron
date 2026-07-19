@@ -86,6 +86,25 @@ export const colorProductNode: ShopifyProductNode = {
       { url: 'https://cdn.shopify.com/s/files/1/0792/2286/6117/files/photo3.jpg', altText: null },
     ],
   },
+  // The `options` connection with merchant-configured swatches — selected on
+  // the DETAIL query only. Red/Black carry a hex color; White carries a texture
+  // image swatch (exercises both swatch shapes).
+  options: [
+    {
+      name: 'Color',
+      optionValues: [
+        { name: 'Red', swatch: { color: '#ff0000', image: null } },
+        { name: 'Black', swatch: { color: '#000000', image: null } },
+        {
+          name: 'White',
+          swatch: {
+            color: null,
+            image: { url: 'https://cdn.shopify.com/s/files/1/0792/2286/6117/files/white-texture.jpg' },
+          },
+        },
+      ],
+    },
+  ],
   variants: {
     nodes: [
       {

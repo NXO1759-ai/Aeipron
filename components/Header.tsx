@@ -24,9 +24,12 @@ export function Header() {
   // direction). The /collaborators route + components are kept on disk for
   // future reuse — only the nav entry is removed. Re-add the line below to
   // surface it again: { label: "Collaborators", href: "/collaborators" },
+  // Collection is likewise hidden from the nav (replaced by Shop) — the
+  // /collection routes stay on disk for re-enabling when more collections exist.
   const navLinks = [
-    { label: "Collection", href: "/collection" },
+    { label: "Shop", href: "/shop" },
     { label: "Our Story", href: "/story" },
+    { label: "Help Center", href: "/help" },
   ];
 
   return (

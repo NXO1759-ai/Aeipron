@@ -5,6 +5,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import { mapProduct, mapCollectionSummary } from '@/lib/shopify/adapter';
+import type { ShopifyProductNode } from '@/lib/shopify/types';
 import {
   shirtsProductNode,
   colorProductNode,
@@ -260,6 +261,152 @@ describe('mapProduct', () => {
       const red = product.options[0].values.find((v) => v.value === 'Red');
       const black = product.options[0].values.find((v) => v.value === 'Black');
       expect(red?.image).not.toBe(black?.image);
+    });
+  });
+
+  describe('swatch mapping (colorHex / swatchImage)', () => {
+    it('threads the Shopify swatch color onto the matching option value', () => {
+      const product = mapProduct(colorProductNode);
+      const red = product.options[0].values.find((v) => v.value === 'Red');
+      const black = product.options[0].values.find((v) => v.value === 'Black');
+      expect(red?.colorHex).toBe('#ff0000');
+      expect(black?.colorHex).toBe('#000000');
+    });
+
+    it('threads a swatch IMAGE onto the matching option value (texture/pattern)', () => {
+      const product = mapProduct(colorProductNode);
+      const white = product.options[0].values.find((v) => v.value === 'White');
+      expect(white?.swatchImage).toBe(
+        'https://cdn.shopify.com/s/files/1/0792/2286/6117/files/white-texture.jpg',
+      );
+      // White's swatch has color: null → colorHex must be undefined (not 'null').
+      expect(white?.colorHex).toBeUndefined();
+    });
+
+    it('leaves swatch fields undefined when the value has no swatch', () => {
+      const node: typeof colorProductNode = {
+        ...colorProductNode,
+        options: [
+          {
+            name: 'Color',
+            optionValues: [{ name: 'Red', swatch: null }],
+          },
+        ],
+      };
+      const product = mapProduct(node);
+      const red = product.options[0].values.find((v) => v.value === 'Red');
+      expect(red?.colorHex).toBeUndefined();
+      expect(red?.swatchImage).toBeUndefined();
+    });
+
+    it('leaves swatch fields undefined on the collection-card path (no options)', () => {
+      // shirtsProductNode has no `options` connection (mirrors the shared
+      // fragment used by collection cards) — swatch fields stay undefined.
+      const product = mapProduct(shirtsProductNode);
+      for (const v of product.options[0].values) {
+        expect(v.colorHex).toBeUndefined();
+        expect(v.swatchImage).toBeUndefined();
+      }
+    });
+
+    it('matches swatch by exact (name, value) — ignores unmatched values', () => {
+      // An option value present in the variants but absent from the swatch list
+      // keeps undefined swatch fields (no spurious cross-match).
+      const node: typeof colorProductNode = {
+        ...colorProductNode,
+        options: [
+          {
+            name: 'Color',
+            optionValues: [{ name: 'Black', swatch: { color: '#000000', image: null } }],
+          },
+        ],
+      };
+      const product = mapProduct(node);
+      const red = product.options[0].values.find((v) => v.value === 'Red');
+      expect(red?.colorHex).toBeUndefined();
+    });
+
+    it('matches swatch case-sensitively — a lowercase swatch name does NOT match a Title-case value', () => {
+      // Shopify's selectedOptions.value and optionValues.name share a source,
+      // so they match casing; the adapter is intentionally case-sensitive. Pin
+      // the contract so a future "fuzzy" change can't silently cross-match.
+      const node: typeof colorProductNode = {
+        ...colorProductNode,
+        options: [
+          {
+            name: 'Color',
+            optionValues: [{ name: 'black', swatch: { color: '#000000', image: null } }],
+          },
+        ],
+      };
+      const product = mapProduct(node);
+      const black = product.options[0].values.find((v) => v.value === 'Black');
+      expect(black?.colorHex).toBeUndefined();
+    });
+
+    it('threads swatches onto ONLY the matching group in a multi-group product (Color × Size)', () => {
+      // A product with both Color (swatch-threaded) and Size (no swatch): the
+      // swatch stamp must not bleed into the Size group, and group order is
+      // preserved (first-seen from the variants).
+      const node: ShopifyProductNode = {
+        id: 'gid://shopify/Product/multigroup',
+        handle: 'multigroup',
+        title: 'Multigroup Hoodie',
+        description: 'Color x Size.',
+        featuredImage: { url: 'https://cdn/multi.jpg', altText: null },
+        variants: {
+          nodes: [
+            {
+              id: 'gid://shopify/ProductVariant/black-small',
+              availableForSale: true,
+              selectedOptions: [
+                { name: 'Color', value: 'Black' },
+                { name: 'Size', value: 'Small' },
+              ],
+              price: { amount: '60.0', currencyCode: 'USD' },
+              image: null,
+            },
+            {
+              id: 'gid://shopify/ProductVariant/black-large',
+              availableForSale: true,
+              selectedOptions: [
+                { name: 'Color', value: 'Black' },
+                { name: 'Size', value: 'large' },
+              ],
+              price: { amount: '60.0', currencyCode: 'USD' },
+              image: null,
+            },
+          ],
+        },
+        priceRange: {
+          minVariantPrice: { amount: '60.0', currencyCode: 'USD' },
+          maxVariantPrice: { amount: '60.0', currencyCode: 'USD' },
+        },
+        options: [
+          {
+            name: 'Color',
+            optionValues: [{ name: 'Black', swatch: { color: '#000000', image: null } }],
+          },
+          {
+            name: 'Size',
+            optionValues: [
+              { name: 'Small', swatch: null },
+              { name: 'large', swatch: null },
+            ],
+          },
+        ],
+      };
+      const product = mapProduct(node);
+      expect(product.options.map((o) => o.name)).toEqual(['Color', 'Size']);
+      const colorGroup = product.options[0];
+      const sizeGroup = product.options[1];
+      // Color group: Black gets the swatch.
+      expect(colorGroup.values.find((v) => v.value === 'Black')?.colorHex).toBe('#000000');
+      // Size group: no swatch bled in.
+      for (const v of sizeGroup.values) {
+        expect(v.colorHex).toBeUndefined();
+        expect(v.swatchImage).toBeUndefined();
+      }
     });
   });
 });

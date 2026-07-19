@@ -14,6 +14,14 @@
  * `price` / `image` are likewise aggregates (min price / first image across the
  * variants offering this value) and are display-only for the picker. The live
  * price + gallery image come from the resolved `ProductVariant`.
+ *
+ * `colorHex` / `swatchImage` are sourced from Shopify's `swatch` data on the
+ * option value (see `lib/shopify/queries.ts` `PRODUCT_BY_HANDLE_QUERY`) and are
+ * undefined for products/options without configured swatches (and on the
+ * collection-card path, which doesn't select the `options` connection). The
+ * color picker renders a visual swatch from these via `resolveSwatch`
+ * (`lib/color.ts`), with a name→hex fallback so any color renders even with no
+ * Shopify Admin setup.
  */
 export interface ProductOptionValue {
   value: string;
@@ -23,6 +31,12 @@ export interface ProductOptionValue {
   // when the variant has none. '' when neither the variant nor the product has
   // an image (never an empty <img src>).
   image: string;
+  // Shopify `swatch.color` (a hex string) for this option value, when the
+  // merchant configured a swatch in Shopify Admin. Undefined when absent.
+  colorHex?: string;
+  // Shopify `swatch.image` URL for this option value (texture / pattern), when
+  // the merchant configured an image swatch. Undefined when absent.
+  swatchImage?: string;
 }
 
 /**
