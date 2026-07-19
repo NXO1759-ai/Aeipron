@@ -45,7 +45,7 @@ export default function StoryPage() {
             </div>
           </div>
           <p className="text-lg md:text-2xl font-light leading-relaxed text-neutral-400 max-w-2xl mx-auto">
-            Apeiron was born from a singular vision: to erase the boundary between structural luxury and everyday ease. We design for the limitless—those who demand absolute mastery in every layer of their uniform.
+            Apeiron is Greek for &ldquo;without limit.&rdquo; We make everyday apparel, built to outlast the trend cycle.
           </p>
         </motion.div>
       </section>
@@ -60,10 +60,10 @@ export default function StoryPage() {
             variants={fadeUpVariant}
           >
             <h2 className="text-3xl md:text-5xl font-bold uppercase tracking-widest mb-8 text-[#fdfcf0]">
-              Beyond The Expected
+              Beyond The Trend
             </h2>
             <p className="text-base md:text-lg font-light leading-relaxed text-neutral-400">
-              The concept was forged out of a deep frustration with the modern wardrobe. We saw a landscape divided between rigid, uncomfortable tailoring and uninspired leisurewear. Apeiron bridges that gap, offering a seamless integration of high-density textures and architectural silhouettes designed to move with you.
+              You know the compromise. Tailoring that looks right and feels wrong. Leisure wear that feels right and looks like giving up. We started Apeiron to close that gap. Clothes with the structure of tailoring, cut from fabrics you can actually live in. They move with you, hold their shape, and outlast the season they were bought in. We don&apos;t really think of it as fashion. It&apos;s infrastructure for your day.
             </p>
           </motion.div>
           <motion.div
@@ -96,7 +96,7 @@ export default function StoryPage() {
             Obsessive Engineering
           </h2>
           <p className="text-lg md:text-2xl font-light leading-relaxed text-neutral-400">
-            True confidence is built from the thread up. We source exclusively from the world’s most revered mills, utilizing custom heavyweight Japanese loopback terry and hyper-durable textiles. Every French seam, blind-debossed detail, and structural fold is meticulously calibrated for longevity and form.
+            Every decision starts with the fabric. Our loopback terry is custom-milled, heavyweight and dense, so it drapes like tailoring and softens with wear instead of pilling. French seams throughout. Branding debossed, never printed. If a detail doesn&apos;t make the garment last longer or fit better, it doesn&apos;t make the cut.
           </p>
         </motion.div>
       </section>
@@ -114,7 +114,7 @@ export default function StoryPage() {
             Quiet Confidence<br />Everyday Mastery
           </h2>
           <p className="text-base md:text-xl font-light leading-relaxed text-neutral-400 max-w-2xl mx-auto">
-            Our garments are not designed to shout; they are engineered to perform. We create foundational pieces for visionaries, creators, and leaders who require their wardrobe to be as uncompromising as their ambitions. This is your canvas for limitless potential.
+            We don&apos;t make clothes that announce themselves. Most of what we make is black, the branding is invisible from more than a few feet away, and none of it will look dated in ten years. The people who wear Apeiron have usually outgrown the trend cycle. They want a wardrobe as considered as the rest of their life. The people who notice these things will notice. Everyone else will just think you look put together. That&apos;s the whole idea.
           </p>
         </motion.div>
       </section>
