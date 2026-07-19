@@ -45,8 +45,7 @@ export default function StoryPage() {
             </div>
           </div>
           <p className="text-lg md:text-2xl font-light leading-relaxed text-neutral-400 max-w-2xl mx-auto">
-            Apeiron is Greek for "without limit." 
-            We make everyday apparel, built to outlast the trend cycle.
+            Apeiron is Greek for &ldquo;without limit.&rdquo; We make everyday apparel, built to outlast the trend cycle.
           </p>
         </motion.div>
       </section>
@@ -64,7 +63,7 @@ export default function StoryPage() {
               Beyond The Trend
             </h2>
             <p className="text-base md:text-lg font-light leading-relaxed text-neutral-400">
-              You know the compromise. Tailoring that looks right and feels wrong. Leisurewear that feels right and looks like giving up. We started Apeiron to close that gap. Clothes with the structure of tailoring, cut from fabrics you can actually live in. They move with you, hold their shape, and outlast the season they were bought in. We don't really think of it as fashion. It's infrastructure for your day.
+              You know the compromise. Tailoring that looks right and feels wrong. Leisure wear that feels right and looks like giving up. We started Apeiron to close that gap. Clothes with the structure of tailoring, cut from fabrics you can actually live in. They move with you, hold their shape, and outlast the season they were bought in. We don&apos;t really think of it as fashion. It&apos;s infrastructure for your day.
             </p>
           </motion.div>
           <motion.div
@@ -97,7 +96,7 @@ export default function StoryPage() {
             Obsessive Engineering
           </h2>
           <p className="text-lg md:text-2xl font-light leading-relaxed text-neutral-400">
-            Every decision starts with the fabric. Our loopback terry is custom-milled, heavyweight and dense, so it drapes like tailoring and softens with wear instead of pilling. French seams throughout. Branding debossed, never printed. If a detail doesn't make the garment last longer or fit better, it doesn't make the cut.
+            Every decision starts with the fabric. Our loopback terry is custom-milled, heavyweight and dense, so it drapes like tailoring and softens with wear instead of pilling. French seams throughout. Branding debossed, never printed. If a detail doesn&apos;t make the garment last longer or fit better, it doesn&apos;t make the cut.
           </p>
         </motion.div>
       </section>
@@ -115,7 +114,7 @@ export default function StoryPage() {
             Quiet Confidence<br />Everyday Mastery
           </h2>
           <p className="text-base md:text-xl font-light leading-relaxed text-neutral-400 max-w-2xl mx-auto">
-            We don't make clothes that announce themselves. Most of what we make is black, the branding is invisible from more than a few feet away, and none of it will look dated in ten years. The people who wear Apeiron have usually outgrown the trend cycle. They want a wardrobe as considered as the rest of their life. The people who notice these things will notice. Everyone else will just think you look put together. That's the whole idea.
+            We don&apos;t make clothes that announce themselves. Most of what we make is black, the branding is invisible from more than a few feet away, and none of it will look dated in ten years. The people who wear Apeiron have usually outgrown the trend cycle. They want a wardrobe as considered as the rest of their life. The people who notice these things will notice. Everyone else will just think you look put together. That&apos;s the whole idea.
           </p>
         </motion.div>
       </section>
