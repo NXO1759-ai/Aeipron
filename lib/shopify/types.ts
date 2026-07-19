@@ -156,6 +156,29 @@ export interface ShopifyShippingProtectionResponse {
   } | null;
 }
 
+/**
+ * A single field on a Storefront `metaobject` entry. The Storefront API returns
+ * EVERY field value as a string (booleans come back as "true"/"false", numbers
+ * as their string form) — callers parse per the field's known type.
+ */
+export interface ShopifyMetaobjectField {
+  key: string;
+  value: string;
+}
+
+/**
+ * Response shape for the `metaobject(handle:)` query
+ * (SHIPPING_PROTECTION_CONTENT_QUERY). `metaobject` is null when the definition
+ * is not storefront-visible (access.storefront ≠ PUBLIC_READ) or the entry
+ * doesn't exist. `fields` is a flat key/value list — reduce it into a map.
+ */
+export interface ShopifyMetaobjectResponse {
+  metaobject: {
+    handle: string;
+    fields: ShopifyMetaobjectField[];
+  } | null;
+}
+
 // ---------------------------------------------------------------------------
 // Raw Shopify Cart API response shapes (Phase 2 — operations 5–9).
 //

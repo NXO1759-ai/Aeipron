@@ -3,6 +3,7 @@
 import { ShieldCheck, Loader2 } from 'lucide-react';
 import { useCart, isProtectionLine } from '@/store/use-cart';
 import { computeProtectionOffering } from '@/lib/shipping-protection/ladder';
+import { DEFAULT_PROTECTION_CONTENT } from '@/lib/shipping-protection/types';
 import { formatCurrency } from '@/lib/utils';
 
 // ---------------------------------------------------------------------------
@@ -37,10 +38,14 @@ export function ShippingProtectionToggle() {
   const items = useCart((s) => s.items);
   const variants = useCart((s) => s.protectionVariants);
   const rate = useCart((s) => s.protectionRate);
+  const content = useCart((s) => s.protectionContent);
   const currencyCode = useCart((s) => s.currencyCode);
   const status = useCart((s) => s.status);
   const toggle = useCart((s) => s.toggleShippingProtection);
 
+  // Feature disabled from the Shopify Admin (the metaobject `enabled` flag) —
+  // the merchant turned protection off with no code deploy: render nothing.
+  if (!content.enabled) return null;
   // No config → protection product not visible to the Storefront API: render
   // nothing. An empty cart has nothing to protect either.
   if (variants.length === 0 || items.length === 0) return null;
@@ -55,6 +60,11 @@ export function ShippingProtectionToggle() {
   const checked = items.some((i) => isProtectionLine(i, variants));
   const pending = status === 'pending';
   const feeLabel = formatCurrency(offering.fee, currencyCode);
+  // Live copy from the merchant-editable metaobject (with per-field fallbacks
+  // to the defaults so a partial entry never renders empty strings).
+  const labelOn = content.labelOn || DEFAULT_PROTECTION_CONTENT.labelOn;
+  const labelOff = content.labelOff || DEFAULT_PROTECTION_CONTENT.labelOff;
+  const description = content.description || DEFAULT_PROTECTION_CONTENT.description;
 
   return (
     <div className="mb-6 border border-ui-concrete/20 p-4">
@@ -67,7 +77,7 @@ export function ShippingProtectionToggle() {
             checked={checked}
             disabled={pending}
             onChange={(e) => void toggle(e.target.checked)}
-            aria-label={`${checked ? 'Remove' : 'Add'} shipping protection for ${feeLabel}`}
+            aria-label={`${checked ? labelOn : labelOff} — ${feeLabel}`}
           />
           {/* Track (sibling of input → peer-checked works). */}
           <span
@@ -84,13 +94,13 @@ export function ShippingProtectionToggle() {
         <span className="flex-1">
           <span className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-primary-cream">
             <ShieldCheck className="h-4 w-4 text-accent-energy" aria-hidden="true" />
-            {checked ? 'Shipping protection' : 'Add shipping protection'}
+            {checked ? labelOn : labelOff}
             <span className="font-mono normal-case tracking-normal text-ui-concrete">
               +{feeLabel}
             </span>
           </span>
           <span className="mt-1 block text-xs leading-relaxed text-ui-concrete">
-            Cover loss, theft, and damage in transit. Added at checkout by Captain.
+            {description}
           </span>
         </span>
 

@@ -18,8 +18,9 @@ import {
 
 // ---------------------------------------------------------------------------
 // Pure resolver tests — no Shopify, no env, no DOM. Locks the fee formula
-// (cart subtotal × rate → nearest grid tier) and the cart-level helpers
-// (protection-line identification, merchandise-subtotal exclusion, offering).
+// (cart subtotal × rate → round UP to the next grid tier, grid minimum applies
+// below the floor) and the cart-level helpers (protection-line identification,
+// merchandise-subtotal exclusion, offering).
 // ---------------------------------------------------------------------------
 
 const RATE = 0.02;
@@ -56,15 +57,16 @@ describe('resolveProtectionVariant', () => {
     expect(resolveProtectionVariant([{ id: '1', title: '*3.00', price: 3 }], 100, RATE)).toBeNull();
   });
 
-  it('picks the grid tier nearest to subtotal × rate', () => {
-    // $220 cart × 2% = $4.40 target. Grid: 4.03 (dist 0.37) vs 5.04 (dist 0.64) → 4.03.
+  it('rounds UP to the next grid tier above subtotal × rate', () => {
+    // $220 cart × 2% = $4.40 target. Grid: 4.03 (< 4.40) and 5.04 (≥ 4.40) → 5.04
+    // (Captain's "closest price variant UPWARDS" rule).
     const v = resolveProtectionVariant(PROTECTION_VARIANTS, 220, RATE);
     expect(v).not.toBeNull();
-    expect(v!.price).toBe(4.03);
+    expect(v!.price).toBe(5.04);
   });
 
   it('clamps to the lowest tier when the target is below the grid', () => {
-    // $10 × 2% = $0.20 → below the $1.00 minimum → $1.00.
+    // $10 × 2% = $0.20 → below the $1.00 minimum → $1.00 (minimum applies).
     expect(resolveProtectionVariant(PROTECTION_VARIANTS, 10, RATE)!.price).toBe(1.0);
   });
 
@@ -79,36 +81,37 @@ describe('resolveProtectionVariant', () => {
 
   it('is robust to unsorted variant input (sorts internally)', () => {
     const shuffled = [...PROTECTION_GRID].reverse();
-    expect(resolveProtectionVariant(shuffled, 220, RATE)!.price).toBe(4.03);
+    expect(resolveProtectionVariant(shuffled, 220, RATE)!.price).toBe(5.04);
   });
 
   it('a boundary exactly on a tier picks that tier', () => {
-    // $50 × 2% = $1.00 exactly → $1.00.
+    // $50 × 2% = $1.00 exactly → $1.00 (on the tier → that tier).
     expect(resolveProtectionVariant(PROTECTION_VARIANTS, 50, RATE)!.price).toBe(1.0);
-    // $100 × 2% = $2.00 → nearest grid is 2.01 (dist 0.01) vs 1.00 (dist 1.00).
+    // $100 × 2% = $2.00 → no $2.00 tier; round up to the next tier ≥ 2.00 → 2.01.
     expect(resolveProtectionVariant(PROTECTION_VARIANTS, 100, RATE)!.price).toBe(2.01);
   });
 
   it('respects the rate (a higher rate lifts the tier for the same subtotal)', () => {
-    // $100 × 4% = $4.00 → nearest 4.03.
+    // $100 × 4% = $4.00 → round up to the next tier ≥ 4.00 → 4.03.
     expect(resolveProtectionVariant(PROTECTION_VARIANTS, 100, 0.04)!.price).toBe(4.03);
-    // $100 × 2% = $2.00 → nearest 2.01.
+    // $100 × 2% = $2.00 → round up → 2.01.
     expect(resolveProtectionVariant(PROTECTION_VARIANTS, 100, 0.02)!.price).toBe(2.01);
   });
 
-  it('equidistant ties resolve to the lower fee (never rounds a boundary up)', () => {
-    // Build a 2-tier grid: $1.00 and $3.00. Target $2.00 is equidistant → $1.00.
+  it('rounds UP on a tie (never rounds a boundary down)', () => {
+    // Build a 2-tier grid: $1.00 and $3.00. Target $2.00 is exactly between →
+    // round up to $3.00 (the smallest tier ≥ 2.00).
     const two: ProtectionVariant[] = [
       { id: 'a', title: '1.00', price: 1 },
       { id: 'b', title: '3.00', price: 3 },
     ];
-    expect(resolveProtectionVariant(two, 100, 0.02)!.price).toBe(1);
+    expect(resolveProtectionVariant(two, 100, 0.02)!.price).toBe(3);
   });
 });
 
 describe('protectionFeeFor', () => {
   it('returns the resolved tier price', () => {
-    expect(protectionFeeFor(PROTECTION_VARIANTS, 220, RATE)).toBe(4.03);
+    expect(protectionFeeFor(PROTECTION_VARIANTS, 220, RATE)).toBe(5.04);
   });
   it('returns 0 when no grid exists', () => {
     expect(protectionFeeFor([], 220, RATE)).toBe(0);
@@ -171,20 +174,20 @@ describe('computeProtectionOffering', () => {
     const items: CartLine[] = [line({ price: 110, quantity: 2 })]; // 220 merchandise
     const off = computeProtectionOffering(items, PROTECTION_VARIANTS, RATE);
     expect(off).not.toBeNull();
-    expect(off!.fee).toBe(4.03);
-    // merchandiseId is the grid tier with price 4.03.
-    const expected = PROTECTION_GRID.find((v) => v.price === 4.03)!;
+    expect(off!.fee).toBe(5.04);
+    // merchandiseId is the grid tier with price 5.04.
+    const expected = PROTECTION_GRID.find((v) => v.price === 5.04)!;
     expect(off!.merchandiseId).toBe(expected.id);
   });
   it('excludes an existing protection line from the subtotal used for the fee', () => {
-    const prot = PROTECTION_GRID.find((v) => v.price === 4.03)!;
+    const prot = PROTECTION_GRID.find((v) => v.price === 5.04)!;
     const items: CartLine[] = [
       line({ price: 110, quantity: 2 }), // 220 merchandise
       line({ lineId: 'prot', merchandiseId: prot.id, price: prot.price, quantity: 1 }),
     ];
-    // Merchandise subtotal is 220 (protection excluded) → fee still 4.03, no feedback loop.
+    // Merchandise subtotal is 220 (protection excluded) → fee still 5.04, no feedback loop.
     const off = computeProtectionOffering(items, PROTECTION_VARIANTS, RATE);
-    expect(off!.fee).toBe(4.03);
+    expect(off!.fee).toBe(5.04);
     expect(off!.merchandiseId).toBe(prot.id);
   });
   it('returns null when no grid is available', () => {

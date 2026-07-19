@@ -8,22 +8,27 @@
 //
 // HOW CAPTAIN PRICING WORKS (per docs.captaintop.com/shipping-protection-pricing,
 // verified against the live product's 100 variants):
-//   - The merchant sets a PERCENTAGE rate in the Captain dashboard (the docs use
-//     2% as an illustrative example; the merchant configures the real value).
-//   - The fee = cart merchandise subtotal × rate, snapped to a pre-priced
+//   - The merchant sets a PERCENTAGE rate in the Captain dashboard (the client
+//     confirmed 1% for this store; it is driven live from the
+//     `shipping_protection_content` metaobject `rate` field, falling back to the
+//     `CAPTAIN_PROTECTION_RATE` env var).
+//   - The fee = cart merchandise subtotal × rate, mapped to a pre-priced
 //     variant grid: 99 tiers from $1.00 in $1.01 increments (max $99.98). Each
 //     tier is a real Shopify ProductVariant; the charged fee is always one of
 //     these variants — never an arbitrary number.
+//   - Captain selects the grid tier via "closest price variant UPWARDS" — round
+//     UP to the smallest tier whose price ≥ the computed fee — and applies the
+//     grid MINIMUM when the computed fee is below the floor (e.g. $220 × 2% =
+//     $4.40 → bracketed by $4.03 and $5.04 → charges $5.04; $50 × 1% = $0.50,
+//     below the $1.00 floor → charges $1.00).
 //   - A 100th variant titled "*3.00" (a leading `*`) is the merchant's "default
 //     fixed price" fallback used by the FIXED pricing method / when no
 //     percentage rule applies. It is NOT part of the percentage grid and is
 //     excluded here.
 //
-// ⚠️ MERCHANT MUST CONFIRM the rate matches their Captain dashboard setting
-// (env `CAPTAIN_PROTECTION_RATE`) AND that the percentage method (not the
-// fixed-tier method) is what they configured. The grid + nearest-tier snapping
-// are derived from the live variant prices, so they stay correct even if
-// Captain re-ladders fees; only the rate is an assumed input.
+// ⚠️ The rate now comes from the Shopify metaobject (merchant-editable); the env
+// var is a fallback. The grid + round-up + min/max are derived from the live
+// variant prices, so they stay correct even if Captain re-ladders fees.
 // ---------------------------------------------------------------------------
 
 import type { CartLine } from '@/lib/types';
@@ -51,15 +56,21 @@ export function gridVariants(variants: ProtectionVariant[]): ProtectionVariant[]
 /**
  * Resolve the correct protection variant for a given cart merchandise subtotal.
  *
- * `rate` is the merchant's Captain percentage (e.g. 0.02 for 2%). The target
+ * `rate` is the merchant's Captain percentage (e.g. 0.01 for 1%). The target
  * fee is `subtotal × rate`; the returned variant is the GRID tier whose price is
- * NEAREST to that target (clamped to the lowest/highest tier when the target is
- * outside the grid). Returns `null` when there are no grid tiers (the product
- * is not visible to the Storefront API, or all variants are the `*` fallback).
+ * the SMALLEST price `>= target` — i.e. round UP to the next tier — matching
+ * Captain's "closest price variant UPWARDS" selection rule. Returns `null` when
+ * there are no grid tiers (the product is not visible to the Storefront API, or
+ * all variants are the `*` fallback).
  *
- * Nearest-tier snapping (not "smallest ≥") matches Captain's "calculated
- * estimated price" → closest pre-priced variant. It uses the REAL variant
- * prices fetched from the API, so it is robust to fee re-laddering.
+ * Boundary behavior (per Captain's docs):
+ *   - `target <= grid[0].price` → the grid MINIMUM applies (the lowest tier is
+ *     charged; e.g. 1% of a $50 cart = $0.50, below the $1.00 grid floor → $1.00).
+ *   - `target > grid[max].price` → clamp to the highest tier (can't exceed the
+ *     grid; carts over the grid's max pay the top fee).
+ *
+ * It uses the REAL variant prices fetched from the API, so it is robust to fee
+ * re-laddering — if Captain re-prices the grid, the round-up + min/max track it.
  */
 export function resolveProtectionVariant(
   variants: ProtectionVariant[],
@@ -72,19 +83,18 @@ export function resolveProtectionVariant(
   const target = Number(cartSubtotal) * rate;
   if (!Number.isFinite(target)) return grid[0];
 
-  // Nearest by absolute distance. Ties (equidistant) resolve to the lower fee
-  // (the `<=` below keeps the first/cheaper one when distances are equal) so we
-  // never round a boundary up unnecessarily.
-  let best = grid[0];
-  let bestDist = Math.abs(grid[0].price - target);
-  for (let i = 1; i < grid.length; i++) {
-    const dist = Math.abs(grid[i].price - target);
-    if (dist < bestDist) {
-      best = grid[i];
-      bestDist = dist;
-    }
+  const min = grid[0];
+  const max = grid[grid.length - 1];
+  if (target <= min.price) return min; // below the grid floor → minimum applies
+  if (target > max.price) return max; // above the grid ceiling → clamp
+
+  // Round UP: the smallest grid tier whose price is >= target. The grid is
+  // sorted ascending (gridVariants), so the first tier at/above the target is
+  // the round-up result. A target exactly on a tier returns that tier.
+  for (let i = 0; i < grid.length; i++) {
+    if (grid[i].price >= target) return grid[i];
   }
-  return best;
+  return max; // unreachable given the clamp above, but keeps TS happy
 }
 
 /**

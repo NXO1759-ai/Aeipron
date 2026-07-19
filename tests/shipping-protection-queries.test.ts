@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from 'vitest';
 // under Vitest its default export throws, so mock it to an empty module.
 vi.mock('server-only', () => ({}));
 
-import { SHIPPING_PROTECTION_QUERY } from '@/lib/shopify/queries';
+import { SHIPPING_PROTECTION_QUERY, SHIPPING_PROTECTION_CONTENT_QUERY } from '@/lib/shopify/queries';
 
 // ---------------------------------------------------------------------------
 // SHIPPING_PROTECTION_QUERY string validation.
@@ -62,5 +62,27 @@ describe('SHIPPING_PROTECTION_QUERY — structural validity', () => {
 
   it('does NOT reuse the ProductFields fragment (which caps variants at 50)', () => {
     expect(SHIPPING_PROTECTION_QUERY).not.toContain('...ProductFields');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SHIPPING_PROTECTION_CONTENT_QUERY — the merchant-editable toggle content
+// metaobject read. Structural validation only (no live Shopify connection).
+// ---------------------------------------------------------------------------
+
+describe('SHIPPING_PROTECTION_CONTENT_QUERY — structural validity', () => {
+  it('uses a named query operation', () => {
+    expect(SHIPPING_PROTECTION_CONTENT_QUERY).toContain('query ShippingProtectionContent');
+  });
+
+  it('reads the metaobject by handle (handle + type input)', () => {
+    expect(SHIPPING_PROTECTION_CONTENT_QUERY).toContain('metaobject(handle: $handle)');
+    expect(SHIPPING_PROTECTION_CONTENT_QUERY).toContain('$handle: MetaobjectHandleInput!');
+  });
+
+  it('selects the flat fields list (key/value) the reader reduces into a map', () => {
+    expect(SHIPPING_PROTECTION_CONTENT_QUERY).toContain('fields');
+    expect(SHIPPING_PROTECTION_CONTENT_QUERY).toContain('key');
+    expect(SHIPPING_PROTECTION_CONTENT_QUERY).toContain('value');
   });
 });

@@ -286,6 +286,39 @@ export const SHIPPING_PROTECTION_QUERY = `#graphql
   }
 `;
 
+/**
+ * Operation 2c — the Captain shipping-protection toggle content metaobject.
+ *
+ * The toggle's copy (label on/off, description), fee rate, and enabled flag are
+ * driven from a merchant-editable Shopify metaobject (`shipping_protection_content`,
+ * single entry handle `default`), so the client edits them in the Shopify Admin
+ * (Content → Metaobjects) with no GitHub deploy. This query reads that entry via
+ * the public Storefront API.
+ *
+ * `metaobject(handle:)` is null when the definition isn't storefront-visible
+ * (access.storefront ≠ PUBLIC_READ) or the entry doesn't exist — the caller
+ * falls back to DEFAULT_PROTECTION_CONTENT (hardcoded copy + env rate) so the
+ * feature keeps working before/without the metaobject.
+ *
+ * The Storefront API returns EVERY field `value` as a STRING (booleans as
+ * "true"/"false"); the caller parses per known key. `fields` is a flat list —
+ * reduced into a key→value map by the reader.
+ *
+ * Named operation `ShippingProtectionContent` for Shopify query tracking. The
+ * `$handle` is a `MetaobjectHandleInput` (handle + type) passed as a variable.
+ */
+export const SHIPPING_PROTECTION_CONTENT_QUERY = `#graphql
+  query ShippingProtectionContent($handle: MetaobjectHandleInput!) {
+    metaobject(handle: $handle) {
+      handle
+      fields {
+        key
+        value
+      }
+    }
+  }
+`;
+
 // ---------------------------------------------------------------------------
 // Shopify Cart API operations (Phase 2 — operations 5–9).
 //

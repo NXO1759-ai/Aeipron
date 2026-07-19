@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 
 import type { Cart, CartLine } from '@/lib/types';
-import type { ProtectionVariant } from '@/lib/shipping-protection/types';
+import type { ProtectionContent, ProtectionVariant } from '@/lib/shipping-protection/types';
+import { DEFAULT_PROTECTION_CONTENT } from '@/lib/shipping-protection/types';
 import {
   addToCart,
   updateCartLine,
@@ -127,7 +128,13 @@ interface CartState {
   // Storefront API (the toggle renders nothing; the feature degrades silently).
   protectionVariants: ProtectionVariant[];
   protectionRate: number;
-  setProtectionConfig: (cfg: { variants: ProtectionVariant[]; rate: number } | null) => void;
+  // Merchant-editable toggle content (copy + enabled flag) from the
+  // shipping_protection_content metaobject. Defaults to DEFAULT_PROTECTION_CONTENT
+  // until the server config loads (or when the metaobject is absent).
+  protectionContent: ProtectionContent;
+  setProtectionConfig: (
+    cfg: { variants: ProtectionVariant[]; rate: number; content: ProtectionContent } | null,
+  ) => void;
 
   // Mutations (async — optimistic + reconcile).
   addItem: (item: AddItemInput, qty?: number) => Promise<void>;
@@ -225,6 +232,7 @@ const initialState = {
   error: null as string | null,
   protectionVariants: [] as ProtectionVariant[],
   protectionRate: 0,
+  protectionContent: DEFAULT_PROTECTION_CONTENT,
 };
 
 /**
@@ -494,10 +502,10 @@ export const useCart = create<CartState>()((set, get) => ({
 
   setProtectionConfig: (cfg) => {
     if (!cfg) {
-      set({ protectionVariants: [], protectionRate: 0 });
+      set({ protectionVariants: [], protectionRate: 0, protectionContent: DEFAULT_PROTECTION_CONTENT });
       return;
     }
-    set({ protectionVariants: cfg.variants, protectionRate: cfg.rate });
+    set({ protectionVariants: cfg.variants, protectionRate: cfg.rate, protectionContent: cfg.content });
   },
 
   toggleShippingProtection: async (on) => {
@@ -544,7 +552,10 @@ export const useCart = create<CartState>()((set, get) => ({
 
     // Turn ON: resolve the correct tier from the MERCHANDISE subtotal (excludes
     // any protection line, so the fee can't inflate its own tier). If a
-    // protection line already exists, this is a no-op.
+    // protection line already exists, this is a no-op. The OFF path above is
+    // intentionally NOT gated by `enabled` — when the merchant disables the
+    // feature from Shopify, the Hydrator calls toggle(false) to remove the line.
+    if (!get().protectionContent.enabled) return; // feature disabled in Shopify — no opt-in
     if (protectionLineOf(items, protectionVariants)) return;
     const offering = computeProtectionOffering(items, protectionVariants, protectionRate);
     if (!offering) return; // no grid tiers — protection unavailable, no-op
@@ -624,6 +635,9 @@ export const useCart = create<CartState>()((set, get) => ({
       // Never swap while another mutation is in flight — the in-flight op will
       // reconcile and the next call picks up the post-op subtotal.
       if (status !== 'idle') return;
+      // Feature disabled in Shopify — don't auto-swap tiers (the Hydrator
+      // removes the protection line when enabled flips false).
+      if (!get().protectionContent.enabled) return;
       const line = protectionLineOf(items, protectionVariants);
       if (!line) return; // protection off — nothing to reconcile
       const offering = computeProtectionOffering(items, protectionVariants, protectionRate);

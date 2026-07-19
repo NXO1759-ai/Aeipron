@@ -438,12 +438,26 @@ describe('getProtectionConfig', () => {
     mockReadProtectionConfig.mockResolvedValue({
       variants: [{ id: PROTECTION_MERCH_ID, title: '4.03', price: 4.03 }],
       rate: 0.02,
+      content: {
+        labelOn: 'Shipping protection',
+        labelOff: 'Add shipping protection',
+        description: 'Cover loss, theft, and damage in transit. Added at checkout by Captain.',
+        rate: 0.02,
+        enabled: true,
+      },
     });
     const cfg = await getProtectionConfig();
     expect(mockReadProtectionConfig).toHaveBeenCalledTimes(1);
     expect(cfg).toEqual({
       variants: [{ id: PROTECTION_MERCH_ID, title: '4.03', price: 4.03 }],
       rate: 0.02,
+      content: {
+        labelOn: 'Shipping protection',
+        labelOff: 'Add shipping protection',
+        description: 'Cover loss, theft, and damage in transit. Added at checkout by Captain.',
+        rate: 0.02,
+        enabled: true,
+      },
     });
   });
 

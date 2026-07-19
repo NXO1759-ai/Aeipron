@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useCart } from '@/store/use-cart';
+import { useCart, isProtectionLine as isProtectionLineOf } from '@/store/use-cart';
 import { getProtectionConfig } from '@/app/cart/actions';
 
 // ---------------------------------------------------------------------------
@@ -32,8 +32,10 @@ export function ProtectionHydrator() {
   const didRun = useRef(false);
   const items = useCart((s) => s.items);
   const variants = useCart((s) => s.protectionVariants);
+  const enabled = useCart((s) => s.protectionContent.enabled);
   const reconcile = useCart((s) => s.reconcileProtectionVariant);
   const autoDisable = useCart((s) => s.autoDisableProtectionIfEmpty);
+  const toggle = useCart((s) => s.toggleShippingProtection);
 
   // (1) Load protection config once on mount.
   useEffect(() => {
@@ -67,6 +69,18 @@ export function ProtectionHydrator() {
   useEffect(() => {
     void autoDisable();
   }, [items, variants, autoDisable]);
+
+  // (4) Merchant disabled the feature from the Shopify Admin (the metaobject
+  // `enabled` flag flipped false). If a protection line is still in the cart,
+  // remove it — the toggle hides itself (it renders nothing when !enabled) and
+  // a lingering protection line with the feature off is confusing. The store's
+  // toggle(false) path is intentionally NOT gated by `enabled`, so this removal
+  // succeeds. No-op when enabled (the common case) or when no line is present.
+  useEffect(() => {
+    if (enabled) return;
+    const hasProtection = items.some((i) => isProtectionLineOf(i, variants));
+    if (hasProtection) void toggle(false);
+  }, [enabled, items, variants, toggle]);
 
   return null;
 }

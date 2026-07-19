@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { Cart, CartLine } from '@/lib/types';
+import { DEFAULT_PROTECTION_CONTENT } from '@/lib/shipping-protection/types';
 
 // ---------------------------------------------------------------------------
 // Cart store tests (optimistic cache over the Shopify cart).
@@ -78,6 +79,8 @@ const PROTECTION_VARIANTS = [
   { id: 'gid://shopify/ProductVariant/10000000000002', title: '2.01', price: 2.01 },
 ];
 const PROTECTION_RATE = 0.02;
+// Default enabled content (merchant hasn't disabled the feature from Shopify).
+const PROTECTION_CONTENT = { ...DEFAULT_PROTECTION_CONTENT };
 const PROTECTION_LINE_ID = 'gid://shopify/CartLine/prot-real';
 const protectionLine = (price: number, merchandiseId: string): CartLine => ({
   lineId: PROTECTION_LINE_ID,
@@ -117,6 +120,7 @@ beforeEach(() => {
     error: null,
     protectionVariants: [],
     protectionRate: 0,
+    protectionContent: DEFAULT_PROTECTION_CONTENT,
   });
 });
 
@@ -279,7 +283,7 @@ describe('removeItem', () => {
     // The user's Phase 4 requirement: when the last real product is removed
     // with shipping protection enabled, protection is also removed so the cart
     // shows the empty message (no orphan protection line keeping it non-empty).
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     const merchLine = { ...singleCart.lines[0], price: 50, quantity: 1 };
     useCart.setState({ items: [merchLine, protectionLine(1.0, PROTECTION_VARIANTS[0].id)], totalQuantity: 2 });
     // First removeCartLine drops the merchandise → server cart still has the
@@ -297,7 +301,7 @@ describe('removeItem', () => {
   });
 
   it('does NOT drop protection when removing a non-last merchandise line', async () => {
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     const a = { ...multiCart.lines[0], price: 50, quantity: 2 };
     const b = { ...multiCart.lines[1], price: 30, quantity: 1 };
     useCart.setState({ items: [a, b, protectionLine(1.0, PROTECTION_VARIANTS[0].id)], totalQuantity: 4 });
@@ -320,7 +324,7 @@ describe('removeItem', () => {
 
 describe('setQuantity (auto-disable protection on last product)', () => {
   it('drops the protection line too when qty→0 on the last merchandise line', async () => {
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     const merchLine = { ...singleCart.lines[0], price: 50, quantity: 1 };
     useCart.setState({ items: [merchLine, protectionLine(1.0, PROTECTION_VARIANTS[0].id)], totalQuantity: 2 });
     // updateCartLine(qty 0) → server cart still has the orphan protection line;
@@ -339,7 +343,7 @@ describe('setQuantity (auto-disable protection on last product)', () => {
 
 describe('autoDisableProtectionIfEmpty', () => {
   it('turns protection off when only an orphan protection line remains (merchandise = 0)', async () => {
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     useCart.setState({ items: [protectionLine(1.0, PROTECTION_VARIANTS[0].id)], totalQuantity: 1, status: 'idle' });
     mRemoveCartLine.mockResolvedValue({ ...emptyCart, lines: [], totalQuantity: 0, subtotalAmount: 0 });
     await useCart.getState().autoDisableProtectionIfEmpty();
@@ -350,7 +354,7 @@ describe('autoDisableProtectionIfEmpty', () => {
   });
 
   it('is a no-op when merchandise is still present (protection stays on)', async () => {
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     const merchLine = { ...singleCart.lines[0], price: 50, quantity: 1 };
     useCart.setState({ items: [merchLine, protectionLine(1.0, PROTECTION_VARIANTS[0].id)], status: 'idle' });
     await useCart.getState().autoDisableProtectionIfEmpty();
@@ -359,7 +363,7 @@ describe('autoDisableProtectionIfEmpty', () => {
   });
 
   it('is a no-op when protection is already off (no protection line)', async () => {
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     useCart.setState({ items: [singleCart.lines[0]], status: 'idle' });
     await useCart.getState().autoDisableProtectionIfEmpty();
     expect(mRemoveCartLine).not.toHaveBeenCalled();
@@ -374,7 +378,7 @@ describe('autoDisableProtectionIfEmpty', () => {
   });
 
   it('is a no-op while a mutation is pending (never races an in-flight op)', async () => {
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     useCart.setState({ items: [protectionLine(1.0, PROTECTION_VARIANTS[0].id)], status: 'pending' });
     await useCart.getState().autoDisableProtectionIfEmpty();
     expect(mRemoveCartLine).not.toHaveBeenCalled();
@@ -428,14 +432,14 @@ describe('hydrateFromServer', () => {
 
 describe('selectMerchandiseCount', () => {
   it('sums the quantities of merchandise lines only (excludes the protection line)', () => {
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     const merch = { ...singleCart.lines[0], quantity: 3 };
     const items: CartLine[] = [merch, protectionLine(1.0, PROTECTION_VARIANTS[0].id)];
     expect(selectMerchandiseCount(items, PROTECTION_VARIANTS)).toBe(3);
   });
 
   it('returns 0 when only the protection line is present (no phantom badge count)', () => {
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     const items: CartLine[] = [protectionLine(1.0, PROTECTION_VARIANTS[0].id)];
     expect(selectMerchandiseCount(items, PROTECTION_VARIANTS)).toBe(0);
   });
@@ -446,7 +450,7 @@ describe('selectMerchandiseCount', () => {
   });
 
   it('sums quantities across multiple merchandise lines (never lines.length)', () => {
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     const items: CartLine[] = [
       { ...singleCart.lines[0], quantity: 2 },
       { ...singleCart.lines[0], lineId: 'gid://shopify/CartLine/second', quantity: 5 },
@@ -457,19 +461,74 @@ describe('selectMerchandiseCount', () => {
 });
 
 describe('setProtectionConfig', () => {
-  it('stores the variants + rate shipped from the server', () => {
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+  it('stores the variants + rate + content shipped from the server', () => {
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     const s = useCart.getState();
     expect(s.protectionVariants).toEqual(PROTECTION_VARIANTS);
     expect(s.protectionRate).toBe(PROTECTION_RATE);
+    expect(s.protectionContent).toEqual(PROTECTION_CONTENT);
   });
 
   it('clears the config on null (protection product not visible to the Storefront API)', () => {
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     useCart.getState().setProtectionConfig(null);
     const s = useCart.getState();
     expect(s.protectionVariants).toEqual([]);
     expect(s.protectionRate).toBe(0);
+    expect(s.protectionContent).toEqual(DEFAULT_PROTECTION_CONTENT);
+  });
+
+  it('ships merchant-edited copy through to the store (live from Shopify)', () => {
+    const customContent = {
+      labelOn: 'Keep protection',
+      labelOff: 'Add coverage',
+      description: 'Custom description edited in Shopify Admin.',
+      rate: 0.03,
+      enabled: true,
+    };
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: 0.03, content: customContent });
+    const s = useCart.getState();
+    expect(s.protectionContent.labelOn).toBe('Keep protection');
+    expect(s.protectionContent.description).toBe('Custom description edited in Shopify Admin.');
+    expect(s.protectionRate).toBe(0.03);
+  });
+
+  it('disables the feature when the metaobject enabled flag is false', () => {
+    const disabled = { ...DEFAULT_PROTECTION_CONTENT, enabled: false };
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: disabled });
+    expect(useCart.getState().protectionContent.enabled).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// enabled gating (feature disabled from the Shopify Admin)
+// ---------------------------------------------------------------------------
+
+describe('protection enabled flag', () => {
+  it('toggleShippingProtection(true) no-ops when the feature is disabled', async () => {
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: { ...DEFAULT_PROTECTION_CONTENT, enabled: false } });
+    useCart.setState({ items: singleCart.lines.slice() });
+    await useCart.getState().toggleShippingProtection(true);
+    expect(useCart.getState().items.some((i) => i.lineId.startsWith('tmp-protection-'))).toBe(false);
+    expect(mAddToCart).not.toHaveBeenCalled();
+  });
+
+  it('toggleShippingProtection(false) still removes the line when disabled (so the Hydrator can clean up)', async () => {
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: { ...DEFAULT_PROTECTION_CONTENT, enabled: false } });
+    const prot = protectionLine(1.0, PROTECTION_VARIANTS[0].id);
+    useCart.setState({ items: [singleCart.lines[0]!, prot], totalQuantity: 3 });
+    mRemoveCartLine.mockResolvedValueOnce({ ...singleCart, lines: [singleCart.lines[0]!], totalQuantity: 2, subtotalAmount: 50 });
+    await useCart.getState().toggleShippingProtection(false);
+    expect(mRemoveCartLine).toHaveBeenCalledTimes(1);
+    expect(useCart.getState().items.some((i) => i.merchandiseId === prot.merchandiseId)).toBe(false);
+  });
+
+  it('reconcileProtectionVariant no-ops when the feature is disabled', async () => {
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: { ...DEFAULT_PROTECTION_CONTENT, enabled: false } });
+    const prot = protectionLine(1.0, PROTECTION_VARIANTS[0].id);
+    useCart.setState({ items: [singleCart.lines[0]!, prot], totalQuantity: 3, status: 'idle' });
+    await useCart.getState().reconcileProtectionVariant();
+    expect(mSwap).not.toHaveBeenCalled();
   });
 });
 
@@ -479,19 +538,19 @@ describe('setProtectionConfig', () => {
 
 describe('selectHasShippingProtection', () => {
   it('is false when no protection line is cached', () => {
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     useCart.setState({ items: singleCart.lines.slice() });
     expect(selectHasShippingProtection(useCart.getState().items, useCart.getState().protectionVariants)).toBe(false);
   });
 
   it('is true when a real protection line is cached (matches by merchandiseId)', () => {
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     useCart.setState({ items: [protectionLine(1.0, PROTECTION_VARIANTS[0].id)] });
     expect(selectHasShippingProtection(useCart.getState().items, useCart.getState().protectionVariants)).toBe(true);
   });
 
   it('ignores provisional (tmp-) protection lines', () => {
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     useCart.setState({
       items: [{ ...protectionLine(1.0, PROTECTION_VARIANTS[0].id), lineId: 'tmp-protection-x' }],
     });
@@ -513,7 +572,7 @@ describe('toggleShippingProtection', () => {
   });
 
   it('turning ON: optimistically adds a provisional protection line, then reconciles with the server', async () => {
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     // Merchandise subtotal $50 → target $1.00 → tier $1.00 (variant[0]).
     useCart.setState({ items: [{ ...singleCart.lines[0], price: 50, quantity: 1 }], totalQuantity: 1 });
 
@@ -553,7 +612,7 @@ describe('toggleShippingProtection', () => {
   });
 
   it('turning ON: rolls back the provisional line on error (no half-added state)', async () => {
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     useCart.setState({ items: [{ ...singleCart.lines[0], price: 50, quantity: 1 }], totalQuantity: 1 });
     mAddToCart.mockRejectedValue(new Error('We could not update your bag. Please try again.'));
     await useCart.getState().toggleShippingProtection(true);
@@ -564,14 +623,14 @@ describe('toggleShippingProtection', () => {
   });
 
   it('turning ON: is a no-op when protection is already on (no double-add)', async () => {
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     useCart.setState({ items: [protectionLine(1.0, PROTECTION_VARIANTS[0].id)] });
     await useCart.getState().toggleShippingProtection(true);
     expect(mAddToCart).not.toHaveBeenCalled();
   });
 
   it('turning OFF: optimistically removes the protection line and reconciles', async () => {
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     const merchLine = { ...singleCart.lines[0], price: 50, quantity: 1 };
     useCart.setState({ items: [merchLine, protectionLine(1.0, PROTECTION_VARIANTS[0].id)], totalQuantity: 2 });
     mRemoveCartLine.mockResolvedValue({ ...singleCart, lines: [merchLine], totalQuantity: 1, subtotalAmount: 50 });
@@ -584,7 +643,7 @@ describe('toggleShippingProtection', () => {
   });
 
   it('turning OFF: re-hydrates from the server on error', async () => {
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     const merchLine = { ...singleCart.lines[0], price: 50, quantity: 1 };
     const both = [merchLine, protectionLine(1.0, PROTECTION_VARIANTS[0].id)];
     useCart.setState({ items: both, totalQuantity: 2 });
@@ -597,7 +656,7 @@ describe('toggleShippingProtection', () => {
   });
 
   it('turning OFF with no protection line is a no-op', async () => {
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     useCart.setState({ items: [singleCart.lines[0]] });
     await useCart.getState().toggleShippingProtection(false);
     expect(mRemoveCartLine).not.toHaveBeenCalled();
@@ -610,7 +669,7 @@ describe('toggleShippingProtection', () => {
 
 describe('reconcileProtectionVariant', () => {
   it('swaps to the correct tier when the subtotal crosses a boundary', async () => {
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     // Merchandise subtotal $100 → target $2.00 → nearest tier $2.01 (variant[1]),
     // but the cached protection line is still the $1.00 tier (variant[0]).
     const merchLine = { ...singleCart.lines[0], price: 100, quantity: 1 };
@@ -637,7 +696,7 @@ describe('reconcileProtectionVariant', () => {
   });
 
   it('is a no-op when the protection line is already the correct tier', async () => {
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     // Subtotal $50 → tier $1.00; protection line is already $1.00 → no swap.
     const merchLine = { ...singleCart.lines[0], price: 50, quantity: 1 };
     useCart.setState({
@@ -649,14 +708,14 @@ describe('reconcileProtectionVariant', () => {
   });
 
   it('is a no-op when protection is off (no protection line)', async () => {
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     useCart.setState({ items: [singleCart.lines[0]], status: 'idle' });
     await useCart.getState().reconcileProtectionVariant();
     expect(mSwap).not.toHaveBeenCalled();
   });
 
   it('does NOT swap while another mutation is pending (avoids racing)', async () => {
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     const merchLine = { ...singleCart.lines[0], price: 100, quantity: 1 };
     useCart.setState({
       items: [merchLine, protectionLine(1.0, PROTECTION_VARIANTS[0].id)],
@@ -667,7 +726,7 @@ describe('reconcileProtectionVariant', () => {
   });
 
   it('re-hydrates from the server when the (non-atomic) swap fails', async () => {
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     const merchLine = { ...singleCart.lines[0], price: 100, quantity: 1 };
     const both = [merchLine, protectionLine(1.0, PROTECTION_VARIANTS[0].id)];
     useCart.setState({ items: both, status: 'idle' });
@@ -686,7 +745,7 @@ describe('reconcileProtectionVariant', () => {
     // causing the reconcile effect to fire a SECOND swap on a protection line
     // the first swap had already removed → "merchandise line … does not exist".
     // The serial mutation queue prevents the two server calls from overlapping.
-    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE });
+    useCart.getState().setProtectionConfig({ variants: PROTECTION_VARIANTS, rate: PROTECTION_RATE, content: PROTECTION_CONTENT });
     const merchLine = { ...singleCart.lines[0], price: 50, quantity: 1 };
     useCart.setState({
       items: [merchLine, protectionLine(1.0, PROTECTION_VARIANTS[0].id)],
