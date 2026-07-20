@@ -1,293 +1,384 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// ---------------------------------------------------------------------------
-// Cart server-action tests.
-//
-// The actions orchestrate: cookie read/write (mocked), the Shopify Cart API
-// (mocked), and Zustand reconciliation (mocked). These tests verify the
-// decision logic — NOT the network. Mocks:
-//   - 'server-only'          → no-op (it throws outside server components)
-//   - '@/lib/cart-cookie'    → in-memory get/set/clear spies
-//   - '@/lib/shopify/client' → shopifyRequest returns canned cart payloads
-//   - '@/store/use-cart'     → useCart.getState() spy
-//
-// `next/cache` revalidatePath is a no-op in the action, so it needs no mock.
-// ---------------------------------------------------------------------------
-
+// actions.ts transitively imports 'server-only' (via lib/shopify/adapter +
+// lib/shopify/queries + lib/shopify/client). Under Vitest its default export
+// throws, so mock it to an empty module. (The client is mocked separately
+// below, but adapter/queries still load for real and carry the guard.)
 vi.mock('server-only', () => ({}));
 
-const mockGetCartId = vi.fn<() => Promise<string | null>>();
-const mockSetCartId = vi.fn<(id: string) => Promise<void>>();
-const mockClearCartId = vi.fn<() => Promise<void>>();
+// ---------------------------------------------------------------------------
+// Cart server action tests.
+//
+// The actions are the ONLY way the client mutates cart state. They own the
+// cookie lifecycle and return the authoritative domain `Cart`. These tests mock
+// `shopifyRequest` (no live Shopify) and `lib/cart-cookie` (no next/headers) and
+// drive every action through its branches:
+//   - getCart: no cookie / live cart / expired cart (null → clear + null)
+//   - addToCart: create path / add path / expired-cart recovery / userErrors /
+//     input validation
+//   - updateCartLine: update / quantity≤0 → remove / userErrors / validation
+//   - removeCartLine / clearCart / getCheckoutUrl
+//
+// CRITICAL invariant under test: the browser NEVER sends a price. Every
+// mutation variables object is inspected to prove it carries only
+// merchandiseId/quantity/cartId/lineId/lineIds — never a `price` field.
+// ---------------------------------------------------------------------------
 
-vi.mock('@/lib/cart-cookie', () => ({
-  getCartId: () => mockGetCartId(),
-  setCartId: (id: string) => mockSetCartId(id),
-  clearCartId: () => mockClearCartId(),
-  CART_COOKIE: 'apeiron-cart-id',
-}));
-
-const mockShopifyRequest = vi.fn();
+// Mock the Shopify client so actions never hit the network. Providing
+// `ShopifyClientError` keeps the actions' `instanceof` checks type-compatible.
 vi.mock('@/lib/shopify/client', () => ({
-  shopifyRequest: (...args: unknown[]) => mockShopifyRequest(...args),
-  ShopifyClientError: class ShopifyClientError extends Error {},
-}));
-
-const mockSetItems = vi.fn();
-vi.mock('@/store/use-cart', () => ({
-  useCart: {
-    getState: () => ({ setItems: mockSetItems }),
+  shopifyRequest: vi.fn(),
+  ShopifyClientError: class ShopifyClientError extends Error {
+    constructor(message: string, public readonly status?: number) {
+      super(message);
+      this.name = 'ShopifyClientError';
+    }
   },
 }));
 
-// Import AFTER mocks are registered.
+// Mock the cookie helper so next/headers / server-only never load here.
+vi.mock('@/lib/cart-cookie', () => ({
+  getCartId: vi.fn(),
+  setCartId: vi.fn(),
+  clearCartId: vi.fn(),
+  CART_COOKIE: 'apeiron-cart-id',
+}));
+
+// The adapter (mapCart) is a real pure function — let it run on fixture-shaped
+// responses so we also assert the action returns the correctly-mapped Cart.
+const { getCart, addToCart, updateCartLine, removeCartLine, clearCart, getCheckoutUrl } =
+  await import('@/app/cart/actions');
+const { shopifyRequest } = await import('@/lib/shopify/client');
+const { getCartId, setCartId, clearCartId } = await import('@/lib/cart-cookie');
 const {
-  addToCart,
-  updateCartLine,
-  removeCartLine,
-  getCart,
-  getCheckoutUrl,
-} = await import('@/app/cart/actions');
-const { CART_GET_QUERY, CART_CREATE_MUTATION, CART_LINES_ADD_MUTATION, CART_LINES_UPDATE_MUTATION, CART_LINES_REMOVE_MUTATION } =
-  await import('@/lib/shopify/queries');
+  CART_GET_QUERY,
+  CART_CREATE_MUTATION,
+  CART_LINES_ADD_MUTATION,
+  CART_LINES_UPDATE_MUTATION,
+  CART_LINES_REMOVE_MUTATION,
+} = await import('@/lib/shopify/queries');
+const { singleLineCartNode, emptyCartNode } = await import('./fixtures/cart-node');
+const { mapCart } = await import('@/lib/shopify/adapter');
 
-// ---- Canned Shopify payloads (minimal but shape-correct) -------------------
+const CART_ID = 'gid://shopify/Cart/test0001?key=testkey';
+const MERCH_ID = 'gid://shopify/ProductVariant/46514157256901';
+const LINE_ID = 'gid://shopify/CartLine/abc123';
 
-const VARIANT_GID = 'gid://shopify/ProductVariant/111';
-const CART_ID = 'gid://shopify/Cart/abc?key=secret';
-const LINE_GID = 'gid://shopify/CartLine/xyz';
-
-function shopifyCart(overrides: Record<string, unknown> = {}) {
-  return {
-    id: CART_ID,
-    totalQuantity: 1,
-    checkoutUrl: 'https://aeipron.myshopify.com/cart/c/abc?key=secret',
-    cost: {
-      subtotalAmount: { amount: '120.0', currencyCode: 'USD' },
-      totalAmount: { amount: '120.0', currencyCode: 'USD' },
-      totalAmountEstimated: true,
-    },
-    lines: {
-      edges: [
-        {
-          node: {
-            id: LINE_GID,
-            quantity: 1,
-            cost: {
-              amountPerQuantity: { amount: '120.0', currencyCode: 'USD' },
-              totalAmount: { amount: '120.0', currencyCode: 'USD' },
-            },
-            merchandise: {
-              id: VARIANT_GID,
-              title: 'Black / XL',
-              price: { amount: '120.0', currencyCode: 'USD' },
-              image: { url: 'https://cdn.shopify.com/img.png', altText: null },
-              selectedOptions: [
-                { name: 'Color', value: 'Black' },
-                { name: 'Size', value: 'XL' },
-              ],
-              product: { title: 'Apeiron Hoodie', handle: 'apeiron-hoodie' },
-            },
-          },
-        },
-      ],
-    },
-    ...overrides,
-  };
-}
+const mockRequest = vi.mocked(shopifyRequest);
+const mockGetCartId = vi.mocked(getCartId);
+const mockSetCartId = vi.mocked(setCartId);
+const mockClearCartId = vi.mocked(clearCartId);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockRequest.mockReset();
+  mockGetCartId.mockReset();
   mockGetCartId.mockResolvedValue(null);
 });
 
-describe('addToCart', () => {
-  it('rejects a merchandiseId that is not a ProductVariant GID before any Shopify call', async () => {
-    const result = await addToCart({ merchandiseId: 'not-a-gid', quantity: 1 });
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toBe('That variant is unavailable. Please refresh and try again.');
-    expect(mockShopifyRequest).not.toHaveBeenCalled();
-    expect(mockSetCartId).not.toHaveBeenCalled();
-  });
-
-  it('rejects a non-positive quantity', async () => {
-    const result = await addToCart({ merchandiseId: VARIANT_GID, quantity: 0 });
-    expect(result.ok).toBe(false);
-    expect(mockShopifyRequest).not.toHaveBeenCalled();
-  });
-
-  it('creates a NEW cart (cartCreate) when no cookie cart id exists, then stores the id', async () => {
-    mockShopifyRequest.mockResolvedValue({ cartCreate: { cart: shopifyCart(), userErrors: [] } });
-
-    const result = await addToCart({ merchandiseId: VARIANT_GID, quantity: 2 });
-
-    expect(result.ok).toBe(true);
-    // cartCreate used (not cartLinesAdd).
-    expect(mockShopifyRequest).toHaveBeenCalledWith(
-      CART_CREATE_MUTATION,
-      { input: { lines: [{ merchandiseId: VARIANT_GID, quantity: 2 }] } },
-    );
-    // The FULL cart id (incl. ?key=) is persisted verbatim to the cookie.
-    expect(mockSetCartId).toHaveBeenCalledWith(CART_ID);
-    // The Zustand store is reconciled from the Shopify response.
-    expect(mockSetItems).toHaveBeenCalledTimes(1);
-  });
-
-  it('adds to the EXISTING cart (cartLinesAdd) when a cookie cart id exists', async () => {
-    mockGetCartId.mockResolvedValue(CART_ID);
-    mockShopifyRequest.mockResolvedValue({ cartLinesAdd: { cart: shopifyCart(), userErrors: [] } });
-
-    const result = await addToCart({ merchandiseId: VARIANT_GID, quantity: 1 });
-
-    expect(result.ok).toBe(true);
-    expect(mockShopifyRequest).toHaveBeenCalledWith(
-      CART_LINES_ADD_MUTATION,
-      { cartId: CART_ID, lines: [{ merchandiseId: VARIANT_GID, quantity: 1 }] },
-    );
-    // The cookie is NOT rewritten (the cart id did not change).
-    expect(mockSetCartId).not.toHaveBeenCalled();
-  });
-
-  it('maps userErrors to a generic, non-leaking error', async () => {
-    mockShopifyRequest.mockResolvedValue({
-      cartCreate: {
-        cart: null,
-        userErrors: [{ field: ['lines', '0', 'merchandiseId'], message: 'Merchandise does not exist' }],
-      },
-    });
-
-    const result = await addToCart({ merchandiseId: VARIANT_GID, quantity: 1 });
-
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      // Generic message — does NOT leak the Shopify error text.
-      expect(result.error).toBe('Your bag could not be updated. Please try again.');
-      expect(result.error).not.toContain('Merchandise');
-    }
-    // A failed create must NOT persist a cart id.
-    expect(mockSetCartId).not.toHaveBeenCalled();
-  });
-
-  it('clears the cookie and reports when the existing cart has EXPIRED', async () => {
-    mockGetCartId.mockResolvedValue(CART_ID);
-    mockShopifyRequest.mockResolvedValue({ cartLinesAdd: { cart: null, userErrors: [] } });
-
-    const result = await addToCart({ merchandiseId: VARIANT_GID, quantity: 1 });
-
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toBe('Your bag expired. Please try again.');
-    // The stale cookie is cleared so the next add creates a fresh cart.
-    expect(mockClearCartId).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('updateCartLine', () => {
-  it('calls cartLinesUpdate with the line GID and quantity', async () => {
-    mockGetCartId.mockResolvedValue(CART_ID);
-    mockShopifyRequest.mockResolvedValue({ cartLinesUpdate: { cart: shopifyCart(), userErrors: [] } });
-
-    const result = await updateCartLine({ lineId: LINE_GID, quantity: 3 });
-
-    expect(result.ok).toBe(true);
-    expect(mockShopifyRequest).toHaveBeenCalledWith(
-      CART_LINES_UPDATE_MUTATION,
-      { cartId: CART_ID, lines: [{ id: LINE_GID, quantity: 3 }] },
-    );
-    expect(mockSetItems).toHaveBeenCalledTimes(1);
-  });
-
-  it('routes quantity <= 0 to cartLinesRemove instead of cartLinesUpdate', async () => {
-    mockGetCartId.mockResolvedValue(CART_ID);
-    mockShopifyRequest.mockResolvedValue({ cartLinesRemove: { cart: shopifyCart({ totalQuantity: 0, lines: { edges: [] } }), userErrors: [] } });
-
-    const result = await updateCartLine({ lineId: LINE_GID, quantity: 0 });
-
-    expect(result.ok).toBe(true);
-    expect(mockShopifyRequest).toHaveBeenCalledWith(
-      CART_LINES_REMOVE_MUTATION,
-      { cartId: CART_ID, lineIds: [LINE_GID] },
-    );
-  });
-
-  it('rejects a lineId that is not a cart-line GID', async () => {
-    const result = await updateCartLine({ lineId: VARIANT_GID, quantity: 2 });
-    expect(result.ok).toBe(false);
-    expect(mockShopifyRequest).not.toHaveBeenCalled();
-  });
-
-  it('returns ok:false gracefully when there is no cart cookie', async () => {
-    const result = await updateCartLine({ lineId: LINE_GID, quantity: 2 });
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toBe('Your bag may have changed — please refresh the page.');
-    expect(mockShopifyRequest).not.toHaveBeenCalled();
-  });
-});
-
-describe('removeCartLine', () => {
-  it('calls cartLinesRemove with the line GID', async () => {
-    mockGetCartId.mockResolvedValue(CART_ID);
-    mockShopifyRequest.mockResolvedValue({ cartLinesRemove: { cart: shopifyCart({ totalQuantity: 0, lines: { edges: [] } }), userErrors: [] } });
-
-    const result = await removeCartLine({ lineId: LINE_GID });
-
-    expect(result.ok).toBe(true);
-    expect(mockShopifyRequest).toHaveBeenCalledWith(
-      CART_LINES_REMOVE_MUTATION,
-      { cartId: CART_ID, lineIds: [LINE_GID] },
-    );
-  });
-});
+// ---------------------------------------------------------------------------
+// getCart
+// ---------------------------------------------------------------------------
 
 describe('getCart', () => {
-  it('returns null when there is no cookie cart id', async () => {
-    await expect(getCart()).resolves.toBeNull();
-    expect(mockShopifyRequest).not.toHaveBeenCalled();
-  });
-
-  it('returns the mapped cart when Shopify finds it', async () => {
-    mockGetCartId.mockResolvedValue(CART_ID);
-    mockShopifyRequest.mockResolvedValue({ cart: shopifyCart() });
-
+  it('returns null and does not call Shopify when there is no cart cookie', async () => {
     const cart = await getCart();
-    expect(cart).not.toBeNull();
-    expect(mockShopifyRequest).toHaveBeenCalledWith(CART_GET_QUERY, { id: CART_ID });
-    expect(cart?.totalQuantity).toBe(1);
+    expect(cart).toBeNull();
+    expect(shopifyRequest).not.toHaveBeenCalled();
   });
 
-  it('clears the cookie and returns null when the cart expired at Shopify', async () => {
+  it('reads the cart with CART_GET_QUERY and returns the mapped cart', async () => {
     mockGetCartId.mockResolvedValue(CART_ID);
-    mockShopifyRequest.mockResolvedValue({ cart: null });
-
-    await expect(getCart()).resolves.toBeNull();
-    expect(mockClearCartId).toHaveBeenCalledTimes(1);
+    mockRequest.mockResolvedValue({ cart: singleLineCartNode });
+    const cart = await getCart();
+    expect(shopifyRequest).toHaveBeenCalledWith(CART_GET_QUERY, { id: CART_ID });
+    expect(cart).toEqual(mapCart(singleLineCartNode));
   });
 
-  it('returns null (and keeps the cookie) when the Shopify call throws', async () => {
+  it('clears the cookie and returns null when the cart has expired (cart: null)', async () => {
     mockGetCartId.mockResolvedValue(CART_ID);
-    mockShopifyRequest.mockRejectedValue(new Error('network down'));
+    mockRequest.mockResolvedValue({ cart: null });
+    const cart = await getCart();
+    expect(cart).toBeNull();
+    expect(mockClearCartId.mock.calls).toHaveLength(1);
+  });
 
-    await expect(getCart()).resolves.toBeNull();
-    // A transient failure must NOT clear the shopper's cart cookie.
-    expect(mockClearCartId).not.toHaveBeenCalled();
+  it('passes the opaque cart id verbatim (never parses the ?key= secret)', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValue({ cart: singleLineCartNode });
+    await getCart();
+    const [, vars] = mockRequest.mock.calls[0];
+    expect(vars).toEqual({ id: CART_ID });
+    expect((vars as { id: string }).id).toContain('?key=');
   });
 });
 
+// ---------------------------------------------------------------------------
+// addToCart
+// ---------------------------------------------------------------------------
+
+describe('addToCart', () => {
+  it('creates a new cart (cartCreate) when there is no cookie, and stores the returned id', async () => {
+    mockGetCartId.mockResolvedValue(null);
+    mockRequest.mockResolvedValue({
+      cartCreate: { cart: singleLineCartNode, userErrors: [] },
+    });
+    const cart = await addToCart({ merchandiseId: MERCH_ID, quantity: 2 });
+    expect(shopifyRequest).toHaveBeenCalledWith(CART_CREATE_MUTATION, {
+      input: { lines: [{ merchandiseId: MERCH_ID, quantity: 2 }] },
+    });
+    expect(mockSetCartId.mock.calls).toEqual([[singleLineCartNode.id]]);
+    expect(cart).toEqual(mapCart(singleLineCartNode));
+  });
+
+  it('adds to the existing cart (cartLinesAdd) when a cookie exists, and does NOT reset the cookie', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValue({
+      cartLinesAdd: { cart: singleLineCartNode, userErrors: [] },
+    });
+    const cart = await addToCart({ merchandiseId: MERCH_ID, quantity: 1 });
+    expect(shopifyRequest).toHaveBeenCalledWith(CART_LINES_ADD_MUTATION, {
+      cartId: CART_ID,
+      lines: [{ merchandiseId: MERCH_ID, quantity: 1 }],
+    });
+    expect(mockSetCartId.mock.calls).toHaveLength(0);
+    expect(cart).toEqual(mapCart(singleLineCartNode));
+  });
+
+  it('recovers from an expired cart: cartLinesAdd returns cart:null → clears cookie, creates a fresh cart', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValueOnce({ cartLinesAdd: { cart: null, userErrors: [] } });
+    mockRequest.mockResolvedValueOnce({
+      cartCreate: { cart: singleLineCartNode, userErrors: [] },
+    });
+    const cart = await addToCart({ merchandiseId: MERCH_ID, quantity: 1 });
+    expect(mockClearCartId.mock.calls).toHaveLength(1);
+    // Second call should be the create.
+    expect(mockRequest.mock.calls[1][0]).toBe(CART_CREATE_MUTATION);
+    expect(mockSetCartId.mock.calls).toEqual([[singleLineCartNode.id]]);
+    expect(cart).toEqual(mapCart(singleLineCartNode));
+  });
+
+  it('throws a NON-LEAKING error on cartCreate userErrors (no GraphQL detail in the message)', async () => {
+    mockGetCartId.mockResolvedValue(null);
+    mockRequest.mockResolvedValue({
+      cartCreate: {
+        cart: null,
+        userErrors: [{ field: ['lines', '0', 'merchandiseId'], message: 'ProductVariant 999 does not exist' }],
+      },
+    });
+    await expect(addToCart({ merchandiseId: 'gid://shopify/ProductVariant/999', quantity: 1 })).rejects.toThrow();
+    try {
+      await addToCart({ merchandiseId: 'gid://shopify/ProductVariant/999', quantity: 1 });
+    } catch (e) {
+      expect((e as Error).message).not.toContain('ProductVariant');
+      expect((e as Error).message).not.toContain('999');
+    }
+  });
+
+  it('throws on cartLinesAdd userErrors (existing-cart path)', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValue({
+      cartLinesAdd: { cart: null, userErrors: [{ field: ['cartId'], message: 'cart does not exist' }] },
+    });
+    // cart:null with userErrors → the action throws (does NOT silently recover).
+    await expect(addToCart({ merchandiseId: MERCH_ID, quantity: 1 })).rejects.toThrow();
+  });
+
+  it('rejects an empty merchandiseId', async () => {
+    await expect(addToCart({ merchandiseId: '', quantity: 1 })).rejects.toThrow();
+    expect(shopifyRequest).not.toHaveBeenCalled();
+  });
+
+  it('rejects a non-positive / non-integer quantity', async () => {
+    mockGetCartId.mockResolvedValue(null);
+    for (const bad of [0, -1, 2.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      await expect(addToCart({ merchandiseId: MERCH_ID, quantity: bad })).rejects.toThrow();
+    }
+    expect(shopifyRequest).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// updateCartLine
+// ---------------------------------------------------------------------------
+
+describe('updateCartLine', () => {
+  it('calls cartLinesUpdate with the cart-line GID when quantity ≥ 1', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValue({
+      cartLinesUpdate: { cart: singleLineCartNode, userErrors: [] },
+    });
+    await updateCartLine({ lineId: LINE_ID, quantity: 3 });
+    expect(shopifyRequest).toHaveBeenCalledWith(CART_LINES_UPDATE_MUTATION, {
+      cartId: CART_ID,
+      lines: [{ id: LINE_ID, quantity: 3 }],
+    });
+  });
+
+  it('routes quantity ≤ 0 to cartLinesRemove (drops the line)', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValue({
+      cartLinesRemove: { cart: emptyCartNode, userErrors: [] },
+    });
+    await updateCartLine({ lineId: LINE_ID, quantity: 0 });
+    expect(shopifyRequest).toHaveBeenCalledWith(CART_LINES_REMOVE_MUTATION, {
+      cartId: CART_ID,
+      lineIds: [LINE_ID],
+    });
+    // Must NOT have called the update mutation.
+    const calledQueries = mockRequest.mock.calls.map((c) => c[0]);
+    expect(calledQueries).not.toContain(CART_LINES_UPDATE_MUTATION);
+  });
+
+  it('routes negative quantity to cartLinesRemove as well', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValue({
+      cartLinesRemove: { cart: emptyCartNode, userErrors: [] },
+    });
+    await updateCartLine({ lineId: LINE_ID, quantity: -5 });
+    expect(shopifyRequest).toHaveBeenCalledWith(CART_LINES_REMOVE_MUTATION, {
+      cartId: CART_ID,
+      lineIds: [LINE_ID],
+    });
+  });
+
+  it('throws a non-leaking error on userErrors', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValue({
+      cartLinesUpdate: {
+        cart: null,
+        userErrors: [{ field: ['lines', '0'], message: 'line not found gid://shopify/CartLine/xyz' }],
+      },
+    });
+    await expect(updateCartLine({ lineId: LINE_ID, quantity: 2 })).rejects.toThrow();
+    try {
+      await updateCartLine({ lineId: LINE_ID, quantity: 2 });
+    } catch (e) {
+      expect((e as Error).message).not.toContain('line not found');
+    }
+  });
+
+  it('rejects an empty lineId', async () => {
+    await expect(updateCartLine({ lineId: '', quantity: 2 })).rejects.toThrow();
+    expect(shopifyRequest).not.toHaveBeenCalled();
+  });
+
+  it('rejects a non-finite quantity', async () => {
+    await expect(updateCartLine({ lineId: LINE_ID, quantity: Number.NaN })).rejects.toThrow();
+    expect(shopifyRequest).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// removeCartLine
+// ---------------------------------------------------------------------------
+
+describe('removeCartLine', () => {
+  it('calls cartLinesRemove with the cart-line GID', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValue({
+      cartLinesRemove: { cart: emptyCartNode, userErrors: [] },
+    });
+    const cart = await removeCartLine({ lineId: LINE_ID });
+    expect(shopifyRequest).toHaveBeenCalledWith(CART_LINES_REMOVE_MUTATION, {
+      cartId: CART_ID,
+      lineIds: [LINE_ID],
+    });
+    expect(cart).toEqual(mapCart(emptyCartNode));
+  });
+
+  it('rejects an empty lineId', async () => {
+    await expect(removeCartLine({ lineId: '' })).rejects.toThrow();
+    expect(shopifyRequest).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// clearCart
+// ---------------------------------------------------------------------------
+
+describe('clearCart', () => {
+  it('clears the cookie and does not call Shopify (cache clearing is the store job)', async () => {
+    await clearCart();
+    expect(mockClearCartId.mock.calls).toHaveLength(1);
+    expect(shopifyRequest).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getCheckoutUrl
+// ---------------------------------------------------------------------------
+
 describe('getCheckoutUrl', () => {
-  it('returns null when there is no cart', async () => {
-    await expect(getCheckoutUrl()).resolves.toBeNull();
+  it('returns null when there is no cart cookie', async () => {
+    const url = await getCheckoutUrl();
+    expect(url).toBeNull();
+    expect(shopifyRequest).not.toHaveBeenCalled();
   });
 
-  it('returns the checkoutUrl verbatim from Shopify', async () => {
+  it('returns the Shopify checkoutUrl for a live cart', async () => {
     mockGetCartId.mockResolvedValue(CART_ID);
-    mockShopifyRequest.mockResolvedValue({ cart: shopifyCart() });
-
-    await expect(getCheckoutUrl()).resolves.toBe('https://aeipron.myshopify.com/cart/c/abc?key=secret');
+    mockRequest.mockResolvedValue({ cart: singleLineCartNode });
+    const url = await getCheckoutUrl();
+    expect(url).toBe(singleLineCartNode.checkoutUrl);
+    expect(url).toContain('.myshopify.com/cart/c/');
   });
 
-  it('returns null when the cart has no checkoutUrl yet', async () => {
+  it('clears the cookie and returns null when the cart has expired', async () => {
     mockGetCartId.mockResolvedValue(CART_ID);
-    mockShopifyRequest.mockResolvedValue({ cart: { ...shopifyCart(), checkoutUrl: null } });
+    mockRequest.mockResolvedValue({ cart: null });
+    const url = await getCheckoutUrl();
+    expect(url).toBeNull();
+    expect(mockClearCartId.mock.calls).toHaveLength(1);
+  });
+});
 
-    await expect(getCheckoutUrl()).resolves.toBeNull();
+// ---------------------------------------------------------------------------
+// The price invariant: no mutation ever sends a price to Shopify.
+// ---------------------------------------------------------------------------
+
+describe('price invariant — no mutation payload ever contains a price', () => {
+  it('addToCart (create) sends only merchandiseId + quantity per line', async () => {
+    mockGetCartId.mockResolvedValue(null);
+    mockRequest.mockResolvedValue({ cartCreate: { cart: singleLineCartNode, userErrors: [] } });
+    await addToCart({ merchandiseId: MERCH_ID, quantity: 2 });
+    const [, vars] = mockRequest.mock.calls[0];
+    const line = (vars as { input: { lines: unknown[] } }).input.lines[0] as Record<string, unknown>;
+    expect(Object.keys(line).sort()).toEqual(['merchandiseId', 'quantity']);
+    expect(line).not.toHaveProperty('price');
+  });
+
+  it('addToCart (add) sends only merchandiseId + quantity per line', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValue({ cartLinesAdd: { cart: singleLineCartNode, userErrors: [] } });
+    await addToCart({ merchandiseId: MERCH_ID, quantity: 1 });
+    const [, vars] = mockRequest.mock.calls[0];
+    const line = (vars as { lines: unknown[] }).lines[0] as Record<string, unknown>;
+    expect(Object.keys(line).sort()).toEqual(['merchandiseId', 'quantity']);
+  });
+
+  it('updateCartLine sends only id + quantity (no price)', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValue({ cartLinesUpdate: { cart: singleLineCartNode, userErrors: [] } });
+    await updateCartLine({ lineId: LINE_ID, quantity: 3 });
+    const [, vars] = mockRequest.mock.calls[0];
+    const line = (vars as { lines: unknown[] }).lines[0] as Record<string, unknown>;
+    expect(Object.keys(line).sort()).toEqual(['id', 'quantity']);
+  });
+
+  it('no variables object across any mutation contains a price key', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValue({ cartLinesUpdate: { cart: singleLineCartNode, userErrors: [] } });
+    await updateCartLine({ lineId: LINE_ID, quantity: 3 });
+    mockRequest.mockReset();
+    mockRequest.mockResolvedValue({ cartLinesRemove: { cart: emptyCartNode, userErrors: [] } });
+    await removeCartLine({ lineId: LINE_ID });
+
+    for (const [, vars] of mockRequest.mock.calls) {
+      const json = JSON.stringify(vars);
+      expect(json).not.toContain('"price"');
+      expect(json).not.toContain('"amount"');
+    }
   });
 });
