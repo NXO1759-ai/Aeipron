@@ -1,240 +1,377 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// ---------------------------------------------------------------------------
-// Checkout server-action tests (Phase 4b — custom checkout).
-//
-// The three checkout actions (updateCheckoutContact, selectDeliveryOption,
-// getCheckoutDetails) orchestrate the cookie (mocked), the Shopify Cart API
-// (mocked), and domain helpers. These tests verify the decision logic —
-// buyerIdentity split, add-vs-update address branching, delivery-option
-// selection, and non-leaking error mapping — NOT the network.
-// ---------------------------------------------------------------------------
-
+// actions.ts transitively imports 'server-only' (via the adapter / queries /
+// client). Under Vitest its default export throws, so mock it to an empty module.
 vi.mock('server-only', () => ({}));
 
-const mockGetCartId = vi.fn<() => Promise<string | null>>();
+// Mock the Shopify client so actions never hit the network.
+vi.mock('@/lib/shopify/client', () => ({
+  shopifyRequest: vi.fn(),
+  ShopifyClientError: class ShopifyClientError extends Error {
+    constructor(message: string, public readonly status?: number) {
+      super(message);
+      this.name = 'ShopifyClientError';
+    }
+  },
+}));
+
+// Mock the cookie helper so next/headers / server-only never load here.
 vi.mock('@/lib/cart-cookie', () => ({
-  getCartId: () => mockGetCartId(),
+  getCartId: vi.fn(),
   setCartId: vi.fn(),
   clearCartId: vi.fn(),
   CART_COOKIE: 'apeiron-cart-id',
 }));
 
-const mockShopifyRequest = vi.fn();
-vi.mock('@/lib/shopify/client', () => ({
-  shopifyRequest: (...args: unknown[]) => mockShopifyRequest(...args),
-  ShopifyClientError: class ShopifyClientError extends Error {},
-}));
-
+const { updateCheckoutContact, selectDeliveryOption, getCheckoutDetails } = await import(
+  '@/app/checkout/actions'
+);
+const { shopifyRequest } = await import('@/lib/shopify/client');
+const { getCartId, clearCartId } = await import('@/lib/cart-cookie');
 const {
-  updateCheckoutContact,
-  selectDeliveryOption,
-  getCheckoutDetails,
-} = await import('@/app/checkout/actions');
-const {
+  CART_WITH_DELIVERY_QUERY,
   CART_BUYER_IDENTITY_UPDATE_MUTATION,
   CART_DELIVERY_ADDRESSES_ADD_MUTATION,
-  CART_DELIVERY_ADDRESSES_UPDATE_MUTATION,
   CART_SELECTED_DELIVERY_OPTIONS_UPDATE_MUTATION,
-  CART_WITH_DELIVERY_QUERY,
 } = await import('@/lib/shopify/queries');
+const { mapCheckoutDetails } = await import('@/lib/shopify/adapter');
+const {
+  twoOptionsCartNode,
+  noDeliveryFieldCartNode,
+} = await import('./fixtures/checkout-cart-node');
 
-const CART_ID = 'gid://shopify/Cart/abc?key=secret';
-const GROUP_GID = 'gid://shopify/CartDeliveryGroup/1';
-const ADDRESS_GID = 'gid://shopify/CartSelectableAddress/9';
+const CART_ID = 'gid://shopify/Cart/ckout001?key=ckkey';
 
-const VALID_CONTACT = {
+/** A valid form payload (US address) matching the zod schema. */
+const VALID_INPUT = {
   firstName: 'Jane',
   lastName: 'Doe',
   email: 'jane@example.com',
   phone: '+1 555 123 4567',
   address1: '123 Main St',
   address2: '',
-  city: 'Brooklyn',
-  zip: '11201',
+  city: 'Springfield',
+  zip: '62704',
   country: 'US',
 };
 
-function deliveryGroup(overrides: Record<string, unknown> = {}) {
-  return {
-    id: GROUP_GID,
-    selectedDeliveryOption: null,
-    deliveryOptions: [
-      {
-        handle: 'h-std',
-        code: 'STD',
-        title: 'Standard',
-        description: null,
-        estimatedCost: { amount: '5.0', currencyCode: 'USD' },
-        deliveryMethodType: 'SHIPPING',
-      },
-      {
-        handle: 'h-exp',
-        code: 'EXP',
-        title: 'Express',
-        description: null,
-        estimatedCost: { amount: '15.0', currencyCode: 'USD' },
-        deliveryMethodType: 'SHIPPING',
-      },
-    ],
-    ...overrides,
-  };
-}
-
-function cartWithDelivery(overrides: Record<string, unknown> = {}) {
-  return {
-    id: CART_ID,
-    totalQuantity: 1,
-    checkoutUrl: 'https://aeipron.myshopify.com/cart/c/abc?key=secret',
-    cost: {
-      subtotalAmount: { amount: '120.0', currencyCode: 'USD' },
-      totalAmount: { amount: '125.0', currencyCode: 'USD' },
-      totalAmountEstimated: true,
-    },
-    lines: { edges: [] },
-    deliveryGroups: { nodes: [deliveryGroup()] },
-    ...overrides,
-  };
-}
+const mockRequest = vi.mocked(shopifyRequest);
+const mockGetCartId = vi.mocked(getCartId);
+const mockClearCartId = vi.mocked(clearCartId);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockGetCartId.mockResolvedValue(CART_ID);
+  mockRequest.mockReset();
+  mockGetCartId.mockReset();
+  mockGetCartId.mockResolvedValue(null);
 });
 
+// ---------------------------------------------------------------------------
+// updateCheckoutContact
+// ---------------------------------------------------------------------------
+
 describe('updateCheckoutContact', () => {
-  it('returns null (no Shopify call) when there is no cart cookie', async () => {
-    mockGetCartId.mockResolvedValue(null);
-    await expect(updateCheckoutContact(VALID_CONTACT)).resolves.toBeNull();
-    expect(mockShopifyRequest).not.toHaveBeenCalled();
+  it('returns null without calling Shopify when there is no cart cookie', async () => {
+    const out = await updateCheckoutContact(VALID_INPUT);
+    expect(out).toBeNull();
+    expect(shopifyRequest).not.toHaveBeenCalled();
   });
 
-  it('rejects invalid input with a zod validation error before any Shopify call', async () => {
-    const result = await updateCheckoutContact({ ...VALID_CONTACT, email: 'bad' });
-    expect(result).toBeNull();
-    expect(mockShopifyRequest).not.toHaveBeenCalled();
+  it('calls cartBuyerIdentityUpdate then cartDeliveryAddressesAdd and returns the mapped details', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    // First call: buyer identity (we ignore its cart; return a no-delivery cart).
+    mockRequest.mockResolvedValueOnce({
+      cartBuyerIdentityUpdate: { cart: noDeliveryFieldCartNode, userErrors: [], warnings: [] },
+    });
+    // Second call: delivery add → returns the cart WITH delivery groups.
+    mockRequest.mockResolvedValueOnce({
+      cartDeliveryAddressesAdd: { cart: twoOptionsCartNode, userErrors: [], warnings: [] },
+    });
+
+    const out = await updateCheckoutContact(VALID_INPUT);
+
+    expect(mockRequest.mock.calls[0][0]).toBe(CART_BUYER_IDENTITY_UPDATE_MUTATION);
+    expect(mockRequest.mock.calls[1][0]).toBe(CART_DELIVERY_ADDRESSES_ADD_MUTATION);
+    expect(out).toEqual(mapCheckoutDetails(twoOptionsCartNode));
   });
 
-  it('splits buyerIdentity (email/phone/countryCode) from the delivery address', async () => {
-    // Sequence: withDelivery (no existing address) → buyerIdentity → addressesAdd → withDelivery.
-    mockShopifyRequest
-      .mockResolvedValueOnce({ cart: cartWithDelivery() }) // probe: no selected address
-      .mockResolvedValueOnce({ cartBuyerIdentityUpdate: { cart: cartWithDelivery(), userErrors: [], warnings: [] } })
-      .mockResolvedValueOnce({ cartDeliveryAddressesAdd: { cart: cartWithDelivery(), userErrors: [], warnings: [] } })
-      .mockResolvedValueOnce({ cart: cartWithDelivery() }); // final read
-
-    const result = await updateCheckoutContact(VALID_CONTACT);
-
-    expect(result).not.toBeNull();
-    // 1) buyerIdentity carries ONLY contact + countryCode (never the address).
-    expect(mockShopifyRequest).toHaveBeenNthCalledWith(2, CART_BUYER_IDENTITY_UPDATE_MUTATION, {
+  it('passes only email/phone/countryCode to buyer identity (no price)', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValueOnce({
+      cartBuyerIdentityUpdate: { cart: noDeliveryFieldCartNode, userErrors: [], warnings: [] },
+    });
+    mockRequest.mockResolvedValueOnce({
+      cartDeliveryAddressesAdd: { cart: twoOptionsCartNode, userErrors: [], warnings: [] },
+    });
+    await updateCheckoutContact(VALID_INPUT);
+    const [, vars] = mockRequest.mock.calls[0];
+    expect(vars).toEqual({
       cartId: CART_ID,
       buyerIdentity: { email: 'jane@example.com', phone: '+1 555 123 4567', countryCode: 'US' },
     });
-    // 2) the address goes through cartDeliveryAddressesAdd with selected: true.
-    const addCall = mockShopifyRequest.mock.calls[2];
-    expect(addCall[0]).toBe(CART_DELIVERY_ADDRESSES_ADD_MUTATION);
-    expect(addCall[1].cartId).toBe(CART_ID);
-    expect(addCall[1].addresses).toHaveLength(1);
-    expect(addCall[1].addresses[0].selected).toBe(true);
-    expect(addCall[1].addresses[0].address.deliveryAddress).toMatchObject({
-      address1: '123 Main St',
-      city: 'Brooklyn',
-      countryCode: 'US',
-      zip: '11201',
-      firstName: 'Jane',
-      lastName: 'Doe',
+  });
+
+  it('passes a single selected delivery address (selected: true) with no price', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValueOnce({
+      cartBuyerIdentityUpdate: { cart: noDeliveryFieldCartNode, userErrors: [], warnings: [] },
     });
+    mockRequest.mockResolvedValueOnce({
+      cartDeliveryAddressesAdd: { cart: twoOptionsCartNode, userErrors: [], warnings: [] },
+    });
+    await updateCheckoutContact(VALID_INPUT);
+    const [, vars] = mockRequest.mock.calls[1] as [
+      string,
+      { cartId: string; addresses: { address: { deliveryAddress: Record<string, unknown> }; selected: boolean }[] },
+    ];
+    expect(vars.cartId).toBe(CART_ID);
+    expect(vars.addresses).toHaveLength(1);
+    expect(vars.addresses[0].selected).toBe(true);
+    const da = vars.addresses[0].address.deliveryAddress;
+    expect(da.firstName).toBe('Jane');
+    expect(da.address1).toBe('123 Main St');
+    expect(da.city).toBe('Springfield');
+    expect(da.countryCode).toBe('US');
+    expect(da.zip).toBe('62704');
+    expect(da).not.toHaveProperty('provinceCode');
+    expect(da).not.toHaveProperty('price');
+    expect(da).not.toHaveProperty('amount');
   });
 
-  it('uses cartDeliveryAddressesUpdate (idempotent) when an address already exists', async () => {
-    const existing = cartWithDelivery();
-    (existing.deliveryGroups.nodes[0] as Record<string, unknown>).deliveryAddress = {
-      id: ADDRESS_GID,
-      address1: '1 Old St',
-    };
-    mockShopifyRequest
-      .mockResolvedValueOnce({ cart: existing }) // probe finds existing address id
-      .mockResolvedValueOnce({ cartBuyerIdentityUpdate: { cart: existing, userErrors: [], warnings: [] } })
-      .mockResolvedValueOnce({ cartDeliveryAddressesUpdate: { cart: existing, userErrors: [], warnings: [] } })
-      .mockResolvedValueOnce({ cart: existing });
-
-    await updateCheckoutContact(VALID_CONTACT);
-
-    const updateCall = mockShopifyRequest.mock.calls[2];
-    expect(updateCall[0]).toBe(CART_DELIVERY_ADDRESSES_UPDATE_MUTATION);
-    expect(updateCall[1].addresses[0].id).toBe(ADDRESS_GID);
-    // Never ADD when an address id exists (no duplicate accumulation).
-    expect(
-      mockShopifyRequest.mock.calls.some((c) => c[0] === CART_DELIVERY_ADDRESSES_ADD_MUTATION),
-    ).toBe(false);
+  it('throws a NON-LEAKING error on buyer-identity userErrors (no GraphQL detail)', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValueOnce({
+      cartBuyerIdentityUpdate: {
+        cart: null,
+        userErrors: [{ field: ['buyerIdentity', 'email'], message: 'Email gid://shopify/x is invalid' }],
+        warnings: [],
+      },
+    });
+    let caught: unknown;
+    try {
+      await updateCheckoutContact(VALID_INPUT);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    const msg = (caught as Error).message;
+    expect(msg).not.toContain('gid://shopify');
+    expect(msg).not.toContain('Email');
+    expect(msg).not.toContain('buyerIdentity');
+    // Must NOT have proceeded to the delivery-address call.
+    const calledQueries = mockRequest.mock.calls.map((c) => c[0]);
+    expect(calledQueries).not.toContain(CART_DELIVERY_ADDRESSES_ADD_MUTATION);
   });
 
-  it('returns null with a generic log when Shopify userErrors occur', async () => {
-    mockShopifyRequest
-      .mockResolvedValueOnce({ cart: cartWithDelivery() })
-      .mockResolvedValueOnce({
-        cartBuyerIdentityUpdate: {
-          cart: null,
-          userErrors: [{ field: ['buyerIdentity', 'email'], message: 'Email is invalid' }],
-          warnings: [],
-        },
-      });
+  it('throws on cartDeliveryAddressesAdd userErrors', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValueOnce({
+      cartBuyerIdentityUpdate: { cart: noDeliveryFieldCartNode, userErrors: [], warnings: [] },
+    });
+    mockRequest.mockResolvedValueOnce({
+      cartDeliveryAddressesAdd: {
+        cart: null,
+        userErrors: [{ field: ['addresses', '0'], message: 'country code XX not supported' }],
+        warnings: [],
+      },
+    });
+    await expect(updateCheckoutContact(VALID_INPUT)).rejects.toThrow();
+  });
 
-    await expect(updateCheckoutContact(VALID_CONTACT)).resolves.toBeNull();
+  it('logs warnings but does NOT throw (warnings are non-fatal)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValueOnce({
+      cartBuyerIdentityUpdate: {
+        cart: noDeliveryFieldCartNode,
+        userErrors: [],
+        warnings: [{ code: 'ADDRESS_VALIDATION', message: 'address could not be validated' }],
+      },
+    });
+    mockRequest.mockResolvedValueOnce({
+      cartDeliveryAddressesAdd: { cart: twoOptionsCartNode, userErrors: [], warnings: [] },
+    });
+    const out = await updateCheckoutContact(VALID_INPUT);
+    expect(out).toEqual(mapCheckoutDetails(twoOptionsCartNode)); // succeeded despite warnings
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('clears the cookie and returns null when the cart expired mid-flow (buyer identity cart:null)', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    // userErrors empty but cart null → expired.
+    mockRequest.mockResolvedValueOnce({
+      cartBuyerIdentityUpdate: { cart: null, userErrors: [], warnings: [] },
+    });
+    const out = await updateCheckoutContact(VALID_INPUT);
+    expect(out).toBeNull();
+    expect(mockClearCartId.mock.calls).toHaveLength(1);
+  });
+
+  it('rejects an invalid payload (re-validates server-side, never trusts the client)', async () => {
+    // Bad email + missing required fields — zod fails server-side.
+    await expect(updateCheckoutContact({ ...VALID_INPUT, email: 'not-an-email', firstName: '' })).rejects.toThrow();
+    expect(shopifyRequest).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unknown country code (zod guard)', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    await expect(updateCheckoutContact({ ...VALID_INPUT, country: 'ZZ' })).rejects.toThrow();
+    expect(shopifyRequest).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// selectDeliveryOption
+// ---------------------------------------------------------------------------
+
+const GROUP_ID = 'gid://shopify/CartDeliveryGroup/dg-1';
+const OPTION_HANDLE = 'shopify-Express-1';
 
 describe('selectDeliveryOption', () => {
-  it('persists the two opaque handles via cartSelectedDeliveryOptionsUpdate', async () => {
-    const selected = cartWithDelivery();
-    (selected.deliveryGroups.nodes[0] as Record<string, unknown>).selectedDeliveryOption =
-      deliveryGroup().deliveryOptions[0];
-    mockShopifyRequest.mockResolvedValue({
-      cartSelectedDeliveryOptionsUpdate: { cart: selected, userErrors: [], warnings: [] },
-    });
-
-    const result = await selectDeliveryOption({
-      deliveryGroupId: GROUP_GID,
-      deliveryOptionHandle: 'h-std',
-    });
-
-    expect(result).not.toBeNull();
-    expect(mockShopifyRequest).toHaveBeenCalledWith(
-      CART_SELECTED_DELIVERY_OPTIONS_UPDATE_MUTATION,
-      { cartId: CART_ID, selectedDeliveryOptions: [{ deliveryGroupId: GROUP_GID, deliveryOptionHandle: 'h-std' }] },
-    );
+  it('returns null without calling Shopify when there is no cart cookie', async () => {
+    const out = await selectDeliveryOption({ deliveryGroupId: GROUP_ID, deliveryOptionHandle: OPTION_HANDLE });
+    expect(out).toBeNull();
+    expect(shopifyRequest).not.toHaveBeenCalled();
   });
 
-  it('returns null when there is no cart cookie', async () => {
-    mockGetCartId.mockResolvedValue(null);
-    await expect(
-      selectDeliveryOption({ deliveryGroupId: GROUP_GID, deliveryOptionHandle: 'h-std' }),
-    ).resolves.toBeNull();
-    expect(mockShopifyRequest).not.toHaveBeenCalled();
+  it('calls cartSelectedDeliveryOptionsUpdate and returns the mapped details', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    // selectedOptionCartNode has the selected option + totalAmount 35.
+    const { selectedOptionCartNode } = await import('./fixtures/checkout-cart-node');
+    mockRequest.mockResolvedValueOnce({
+      cartSelectedDeliveryOptionsUpdate: { cart: selectedOptionCartNode, userErrors: [], warnings: [] },
+    });
+    const out = await selectDeliveryOption({ deliveryGroupId: GROUP_ID, deliveryOptionHandle: OPTION_HANDLE });
+    expect(shopifyRequest).toHaveBeenCalledWith(CART_SELECTED_DELIVERY_OPTIONS_UPDATE_MUTATION, {
+      cartId: CART_ID,
+      selectedDeliveryOptions: [{ deliveryGroupId: GROUP_ID, deliveryOptionHandle: OPTION_HANDLE }],
+    });
+    expect(out?.cart.totalAmount).toBe(35);
+    expect(out?.deliveryGroups[0].selectedHandle).toBe(OPTION_HANDLE);
+  });
+
+  it('throws a non-leaking error on userErrors', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValueOnce({
+      cartSelectedDeliveryOptionsUpdate: {
+        cart: null,
+        userErrors: [{ field: ['selectedDeliveryOptions', '0'], message: 'delivery option gid://shopify/y not found' }],
+        warnings: [],
+      },
+    });
+    let caught: unknown;
+    try {
+      await selectDeliveryOption({ deliveryGroupId: GROUP_ID, deliveryOptionHandle: OPTION_HANDLE });
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    const msg = (caught as Error).message;
+    expect(msg).not.toContain('gid://shopify');
+    expect(msg).not.toContain('delivery option');
+    expect(msg).not.toContain('selectedDeliveryOptions');
+  });
+
+  it('clears the cookie and returns null when the cart expired', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValueOnce({
+      cartSelectedDeliveryOptionsUpdate: { cart: null, userErrors: [], warnings: [] },
+    });
+    const out = await selectDeliveryOption({ deliveryGroupId: GROUP_ID, deliveryOptionHandle: OPTION_HANDLE });
+    expect(out).toBeNull();
+    expect(mockClearCartId.mock.calls).toHaveLength(1);
+  });
+
+  it('rejects an empty deliveryGroupId or handle', async () => {
+    await expect(selectDeliveryOption({ deliveryGroupId: '', deliveryOptionHandle: OPTION_HANDLE })).rejects.toThrow();
+    await expect(selectDeliveryOption({ deliveryGroupId: GROUP_ID, deliveryOptionHandle: '' })).rejects.toThrow();
+    expect(shopifyRequest).not.toHaveBeenCalled();
   });
 });
 
+// ---------------------------------------------------------------------------
+// getCheckoutDetails
+// ---------------------------------------------------------------------------
+
 describe('getCheckoutDetails', () => {
-  it('returns null when there is no cart cookie', async () => {
-    mockGetCartId.mockResolvedValue(null);
-    await expect(getCheckoutDetails()).resolves.toBeNull();
-    expect(mockShopifyRequest).not.toHaveBeenCalled();
+  it('returns null without calling Shopify when there is no cart cookie', async () => {
+    const out = await getCheckoutDetails();
+    expect(out).toBeNull();
+    expect(shopifyRequest).not.toHaveBeenCalled();
   });
 
-  it('reads the cart with delivery groups and maps options + selected handle', async () => {
-    mockShopifyRequest.mockResolvedValue({ cart: cartWithDelivery() });
-
-    const details = await getCheckoutDetails();
-
-    expect(mockShopifyRequest).toHaveBeenCalledWith(CART_WITH_DELIVERY_QUERY, { id: CART_ID });
-    expect(details?.deliveryGroups).toHaveLength(1);
-    expect(details?.deliveryGroups[0].deliveryOptions.map((o) => o.title)).toEqual(['Standard', 'Express']);
-    expect(details?.deliveryGroups[0].selectedHandle).toBeNull();
+  it('reads with CART_WITH_DELIVERY_QUERY and returns the mapped details', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValueOnce({ cart: twoOptionsCartNode });
+    const out = await getCheckoutDetails();
+    expect(shopifyRequest).toHaveBeenCalledWith(CART_WITH_DELIVERY_QUERY, { id: CART_ID });
+    expect(out).toEqual(mapCheckoutDetails(twoOptionsCartNode));
   });
 
-  it('returns null (and clears nothing) when the Shopify call throws', async () => {
-    mockShopifyRequest.mockRejectedValue(new Error('network down'));
-    await expect(getCheckoutDetails()).resolves.toBeNull();
+  it('clears the cookie and returns null when the cart expired', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValueOnce({ cart: null });
+    const out = await getCheckoutDetails();
+    expect(out).toBeNull();
+    expect(mockClearCartId.mock.calls).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Price invariant — no checkout mutation payload ever contains a price.
+// ---------------------------------------------------------------------------
+
+describe('price invariant — no checkout payload contains a price', () => {
+  it('updateCheckoutContact sends no price/amount in any variables object', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValueOnce({
+      cartBuyerIdentityUpdate: { cart: noDeliveryFieldCartNode, userErrors: [], warnings: [] },
+    });
+    mockRequest.mockResolvedValueOnce({
+      cartDeliveryAddressesAdd: { cart: twoOptionsCartNode, userErrors: [], warnings: [] },
+    });
+    await updateCheckoutContact(VALID_INPUT);
+
+    for (const [, vars] of mockRequest.mock.calls) {
+      const json = JSON.stringify(vars);
+      expect(json).not.toContain('"price"');
+      expect(json).not.toContain('"amount"');
+    }
+  });
+
+  it('selectDeliveryOption sends only the two opaque handles (no price)', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    const { selectedOptionCartNode } = await import('./fixtures/checkout-cart-node');
+    mockRequest.mockResolvedValueOnce({
+      cartSelectedDeliveryOptionsUpdate: { cart: selectedOptionCartNode, userErrors: [], warnings: [] },
+    });
+    await selectDeliveryOption({ deliveryGroupId: GROUP_ID, deliveryOptionHandle: OPTION_HANDLE });
+    const [, vars] = mockRequest.mock.calls[0];
+    const json = JSON.stringify(vars);
+    expect(json).not.toContain('"price"');
+    expect(json).not.toContain('"amount"');
+    // Only cartId + the two handles.
+    expect(Object.keys(vars as Record<string, unknown>).sort()).toEqual(['cartId', 'selectedDeliveryOptions']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Opaque cart id invariant — never parsed/logged/returned.
+// ---------------------------------------------------------------------------
+
+describe('opaque cart id invariant', () => {
+  it('passes the cart id VERBATIM (incl. the ?key= secret) to every Shopify call', async () => {
+    mockGetCartId.mockResolvedValue(CART_ID);
+    mockRequest.mockResolvedValueOnce({
+      cartBuyerIdentityUpdate: { cart: noDeliveryFieldCartNode, userErrors: [], warnings: [] },
+    });
+    mockRequest.mockResolvedValueOnce({
+      cartDeliveryAddressesAdd: { cart: twoOptionsCartNode, userErrors: [], warnings: [] },
+    });
+    await updateCheckoutContact(VALID_INPUT);
+    for (const [, vars] of mockRequest.mock.calls) {
+      expect((vars as { cartId?: string }).cartId).toBe(CART_ID);
+    }
   });
 });
