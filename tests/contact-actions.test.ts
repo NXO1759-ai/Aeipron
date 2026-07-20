@@ -5,10 +5,11 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 //
 // The action writes a contact_message metaobject to Shopify via the Admin API.
 // These tests mock `@/lib/shopify/admin-client` (so no network) and drive the
-// action's decision logic: env-missing guard, valid submission → adminRequest
-// called with the right payload + returns ok, userErrors → generic non-leaking
-// error, network/throw → generic error, invalid zod → validation error, and the
-// phone field is omitted when empty / included when present.
+// action's decision logic: env-missing guard, honeypot drop, valid submission
+// → adminRequest called with the right payload + returns ok, userErrors →
+// generic non-leaking error, network/throw → generic error, invalid zod →
+// validation error, and the phone field is omitted when empty / included when
+// present.
 //
 // Mirrors tests/checkout-actions.test.ts (mock 'server-only', mock the Shopify
 // client, stub env, dynamic-import the action).
@@ -85,6 +86,22 @@ describe('submitContactMessage — invalid input', () => {
     const result = await submitContactMessage({ ...VALID_INPUT, email: 'not-an-email' });
     expect(result.ok).toBe(false);
     expect(mockAdminRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe('submitContactMessage — honeypot (bot defense)', () => {
+  it('fakes success and never calls the Admin API when the honeypot field is filled', async () => {
+    const result = await submitContactMessage({ ...VALID_INPUT, website: 'https://spam.example' });
+    // The bot sees a success — no signal to adapt — but nothing is written.
+    expect(result.ok).toBe(true);
+    expect(mockAdminRequest).not.toHaveBeenCalled();
+  });
+
+  it('processes the submission normally when the honeypot is empty', async () => {
+    mockAdminRequest.mockResolvedValueOnce(createdResponse());
+    const result = await submitContactMessage({ ...VALID_INPUT, website: '' });
+    expect(result.ok).toBe(true);
+    expect(mockAdminRequest).toHaveBeenCalledTimes(1);
   });
 });
 

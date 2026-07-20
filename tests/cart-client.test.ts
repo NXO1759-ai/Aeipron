@@ -57,9 +57,33 @@ vi.mock('node:https', () => {
   return { default: api, ...api };
 });
 
+// child_process mock: the hardened curl fallback is ASYNC (execFile with a
+// callback) and passes the token + body over the child's stdin (`--config -`)
+// instead of argv. The mock captures the stdin writes so tests can assert the
+// secrets travel over the pipe and NOT the argument list.
+const childProc = vi.hoisted(() => ({
+  stdinChunks: [] as string[],
+}));
+
 vi.mock('node:child_process', () => ({
-  execFileSync: vi.fn(() => '{"data":{"shop":{"name":"Apeiron"}}}'),
-  spawn: vi.fn(),
+  execFile: vi.fn(
+    (
+      _file: string,
+      _args: string[],
+      _opts: unknown,
+      cb: (err: Error | null, stdout: string, stderr: string) => void,
+    ) => {
+      cb(null, '{"data":{"shop":{"name":"Apeiron"}}}', '');
+      return {
+        stdin: {
+          write: (chunk: string) => {
+            childProc.stdinChunks.push(chunk);
+          },
+          end: () => {},
+        },
+      };
+    },
+  ),
 }));
 
 const { shopifyRequest } = await import('@/lib/shopify/client');
@@ -67,12 +91,13 @@ const https = (await import('node:https')) as unknown as {
   __setError: (e: Error) => void;
   __fireTimeout: () => void;
 };
-const { execFileSync } = await import('node:child_process');
+const { execFile } = await import('node:child_process');
 
-const mockExecFileSync = vi.mocked(execFileSync);
+const mockExecFile = vi.mocked(execFile);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  childProc.stdinChunks.length = 0;
   process.env.SHOPIFY_STORE_DOMAIN = 'test.myshopify.com';
   process.env.SHOPIFY_API_VERSION = '2025-07';
   process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN = 'test-token';
@@ -83,7 +108,7 @@ describe('shopifyRequest dual-transport fallback', () => {
     // A plain Error with no code is non-retryable → surface immediately, no curl.
     https.__setError(new Error('something broke'));
     await expect(shopifyRequest('{ shop { name } }')).rejects.toThrow();
-    expect(mockExecFileSync).not.toHaveBeenCalled();
+    expect(mockExecFile).not.toHaveBeenCalled();
   });
 
   it('falls back to curl when the native https request TIMES OUT (the production-critical case)', async () => {
@@ -93,7 +118,7 @@ describe('shopifyRequest dual-transport fallback', () => {
     https.__fireTimeout();
     // The timeout must route to the curl fallback (not throw a network error).
     await expect(p).resolves.toEqual({ shop: { name: 'Apeiron' } });
-    expect(mockExecFileSync).toHaveBeenCalled();
+    expect(mockExecFile).toHaveBeenCalled();
   });
 
   it('falls back to curl on a retryable network error code (ECONNRESET)', async () => {
@@ -101,24 +126,29 @@ describe('shopifyRequest dual-transport fallback', () => {
     err.code = 'ECONNRESET';
     https.__setError(err);
     await expect(shopifyRequest('{ shop { name } }')).resolves.toEqual({ shop: { name: 'Apeiron' } });
-    expect(mockExecFileSync).toHaveBeenCalled();
+    expect(mockExecFile).toHaveBeenCalled();
   });
 
-  it('curl fallback includes the token header and the GraphQL body', async () => {
+  it('curl fallback sends the token + body over STDIN, never the argument list', async () => {
     const err = new Error('connection reset') as NodeJS.ErrnoException;
     err.code = 'ECONNRESET';
     https.__setError(err);
     await shopifyRequest('{ shop { name } }');
-    const args = mockExecFileSync.mock.calls[0];
+    const args = mockExecFile.mock.calls[0];
     const flags = args[1] as string[];
     expect(args[0]).toBe('curl');
     expect(flags).toContain('-X');
     expect(flags).toContain('POST');
-    expect(flags).toContain('X-Shopify-Storefront-Access-Token: test-token');
     expect(flags).toContain('Content-Type: application/json');
-    // The body is the last -d argument.
-    const bodyIdx = flags.indexOf('-d');
-    expect(bodyIdx).toBeGreaterThan(-1);
-    expect(flags[bodyIdx + 1]).toContain('{ shop { name } }');
+    expect(flags).toContain('--fail');
+    // SECURITY: no flag may contain the token or the GraphQL body — argv is
+    // world-readable via /proc / ps on the host.
+    expect(flags.some((f) => f.includes('test-token'))).toBe(false);
+    expect(flags.some((f) => f.includes('{ shop { name } }'))).toBe(false);
+    // The token + body travel over stdin (the `--config -` pipe) instead.
+    expect(flags).toContain('--config');
+    const stdin = childProc.stdinChunks.join('');
+    expect(stdin).toContain('X-Shopify-Storefront-Access-Token: test-token');
+    expect(stdin).toContain('{ shop { name } }');
   });
 });

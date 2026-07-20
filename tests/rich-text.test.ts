@@ -14,6 +14,7 @@ import { buildRichTextTree } from '@/lib/rich-text';
 //     paragraph-wrapped text / link (url+target+rel) / inline formatting flags
 //     (bold / italic / underline / strikethrough / code)
 //   - unknown node types              → children preserved, not dropped
+//   - URL sanitization                → unsafe protocols stripped (XSS guard)
 // ---------------------------------------------------------------------------
 
 describe('buildRichTextTree — absence', () => {
@@ -108,12 +109,7 @@ describe('buildRichTextTree — blocks', () => {
       ],
     });
     expect(buildRichTextTree(value)).toEqual([
-      {
-        kind: 'element',
-        tag: 'ol',
-        props: {},
-        children: [{ kind: 'element', tag: 'li', props: {}, children: [{ kind: 'text', value: 'A' }] }],
-      },
+      { kind: 'element', tag: 'ol', props: {}, children: [{ kind: 'element', tag: 'li', props: {}, children: [{ kind: 'text', value: 'A' }] }] },
     ]);
   });
 
@@ -124,9 +120,7 @@ describe('buildRichTextTree — blocks', () => {
         {
           type: 'list',
           listType: 'unordered',
-          children: [
-            { type: 'list-item', children: [{ type: 'paragraph', children: [{ type: 'text', value: 'One' }] }] },
-          ],
+          children: [{ type: 'list-item', children: [{ type: 'paragraph', children: [{ type: 'text', value: 'One' }] }] }],
         },
       ],
     });
@@ -234,6 +228,101 @@ describe('buildRichTextTree — robustness', () => {
     // Unknown wrapper with children → a <p> block containing the inline text.
     expect(tree).toEqual([
       { kind: 'element', tag: 'p', props: {}, children: [{ kind: 'text', value: 'kept' }] },
+    ]);
+  });
+});
+
+describe('buildRichTextTree — URL sanitization (XSS hardening)', () => {
+  /** Build a rich-text value wrapping a single paragraph of inline children. */
+  function doc(children: unknown[]): string {
+    return JSON.stringify({ type: 'root', children: [{ type: 'paragraph', children }] });
+  }
+
+  it('strips the href from a javascript: link (renders an inert anchor)', () => {
+    const tree = buildRichTextTree(
+      doc([{ type: 'link', url: 'javascript:alert(document.cookie)', children: [{ type: 'text', value: 'click' }] }]),
+    )!;
+    const link = (tree[0] as Extract<typeof tree[0], { kind: 'element' }>).children[0] as Extract<
+      typeof tree[0],
+      { kind: 'element' }
+    >;
+    expect(link.tag).toBe('a');
+    expect(link.props.href).toBeUndefined();
+    expect(link.props.target).toBeUndefined();
+    // The link TEXT is preserved — only the navigation is removed.
+    expect(link.children).toEqual([{ kind: 'text', value: 'click' }]);
+  });
+
+  it('strips data: and vbscript: link urls', () => {
+    for (const url of ['data:text/html,<script>alert(1)</script>', 'vbscript:msgbox(1)']) {
+      const tree = buildRichTextTree(
+        doc([{ type: 'link', url, children: [{ type: 'text', value: 'x' }] }]),
+      )!;
+      const link = (tree[0] as Extract<typeof tree[0], { kind: 'element' }>).children[0] as Extract<
+        typeof tree[0],
+        { kind: 'element' }
+      >;
+      expect(link.props.href).toBeUndefined();
+    }
+  });
+
+  it('strips a javascript: url disguised with leading whitespace / mixed case', () => {
+    const tree = buildRichTextTree(
+      doc([{ type: 'link', url: '  JaVaScRiPt:alert(1)', children: [{ type: 'text', value: 'x' }] }]),
+    )!;
+    const link = (tree[0] as Extract<typeof tree[0], { kind: 'element' }>).children[0] as Extract<
+      typeof tree[0],
+      { kind: 'element' }
+    >;
+    expect(link.props.href).toBeUndefined();
+  });
+
+  it('keeps https / http / mailto / tel and relative link urls', () => {
+    for (const url of ['https://example.com/a', 'http://example.com', 'mailto:hi@example.com', 'tel:+12125550123', '/pages/faq']) {
+      const tree = buildRichTextTree(
+        doc([{ type: 'link', url, children: [{ type: 'text', value: 'x' }] }]),
+      )!;
+      const link = (tree[0] as Extract<typeof tree[0], { kind: 'element' }>).children[0] as Extract<
+        typeof tree[0],
+        { kind: 'element' }
+      >;
+      expect(link.props.href).toBe(url);
+    }
+  });
+
+  it('forces noopener noreferrer on _blank even when the metafield sets a custom rel', () => {
+    const tree = buildRichTextTree(
+      doc([
+        {
+          type: 'link',
+          url: 'https://example.com',
+          target: '_blank',
+          rel: 'opener',
+          children: [{ type: 'text', value: 'x' }],
+        },
+      ]),
+    )!;
+    const link = (tree[0] as Extract<typeof tree[0], { kind: 'element' }>).children[0] as Extract<
+      typeof tree[0],
+      { kind: 'element' }
+    >;
+    expect(link.props.rel).toBe('noopener noreferrer');
+  });
+
+  it('drops an image whose url is not https', () => {
+    for (const url of ['javascript:alert(1)', 'data:image/svg+xml,<svg/>', 'http://example.com/x.png']) {
+      const value = JSON.stringify({ type: 'root', children: [{ type: 'image', url }] });
+      expect(buildRichTextTree(value)).toEqual([]);
+    }
+  });
+
+  it('keeps an https image url', () => {
+    const value = JSON.stringify({
+      type: 'root',
+      children: [{ type: 'image', url: 'https://cdn.shopify.com/x.png' }],
+    });
+    expect(buildRichTextTree(value)).toEqual([
+      { kind: 'element', tag: 'img', props: { src: 'https://cdn.shopify.com/x.png' }, children: [] },
     ]);
   });
 });
