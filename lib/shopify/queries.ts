@@ -1,31 +1,41 @@
 // ---------------------------------------------------------------------------
-// Shopify Storefront API GraphQL operation strings (products + collections).
+// Shopify Storefront API GraphQL operation strings.
 //
-// These are DOCUMENTED STRINGS, not a generated client — each operation is
-// named for Shopify's query tracking and includes only the fields the UI
-// actually renders (no overfetching). Variables are typed and passed
-// separately (never string-interpolated) for injection safety and to enable
-// Shopify-side query deduplication.
+// All field selections are verified against the Storefront API 2025-07 docs.
+// See docs/SHOPIFY_API.md §4 (operations table) and §4.1 (deprecated fields).
 //
-// Fields are chosen to match lib/types.ts exactly; the adapter
-// (lib/shopify/adapter.ts) maps the response shape to our domain types.
+// DO NOT add deprecated fields to these queries:
+//   - priceV2 / compareAtPriceV2 → use price / compareAtPrice
+//   - src / originalSrc / transformedSrc → use url
+//   - productByHandle → use product(handle:)
+//   - estimatedCost / discountAllocations → use cost / discountApplications
 //
-// Note on `id` vs `handle`: Shopify GIDs (gid://shopify/...) are internal —
-// they are NEVER exposed to the browser. Public routes use the URL-safe
-// `handle`. Cart ids are the exception: they are secrets-by-design (the id
-// embeds a `?key=` token) and live only in the HTTP-only cookie.
+// This file is server-only: `import 'server-only'` makes any client import
+// fail at build time (the default export is a throwing stub outside Next's RSC
+// compiler). Do not import it from a 'use client' component.
 // ---------------------------------------------------------------------------
 
 import 'server-only';
 
 /**
- * Fields shared by the collection-products query and the product-detail
- * query, so cards and PDP never drift on what a "product" is. Used as a
- * GraphQL fragment — if a field is renamed, fix it in one place.
+ * Fields shared by every product query. Used as a GraphQL fragment so the
+ * list and detail queries never drift out of sync on field selection. If
+ * Shopify renames a field on an API version bump, this is the one place to
+ * fix it — every consumer updates automatically.
  *
- * `featuredImage` is the card image; `priceRange` gives the min–max display
- * on cards. Variants carry `selectedOptions` so the adapter can build the
- * "Black / XL" descriptor shown in the cart.
+ * Selects:
+ *   id            — Shopify GID (not used for URLs; the adapter maps handle → Product.id)
+ *   handle        — SEO-friendly slug used in the /product/[slug] route
+ *   title         — product display name
+ *   featuredImage — primary image for collection cards
+ *   variants      — size/option matrix with availability + pricing + image
+ *   priceRange    — min/max variant prices for display
+ *
+ * Deliberately does NOT select:
+ *   description       — selected per-query (list uses truncateAt, detail uses full)
+ *   quantityAvailable — token-gated, returns a number; we use availableForSale (boolean) instead
+ *   metafields        — not needed for v1; add per-query if required later
+ *   descriptionHtml   — the prototype renders plain text, not HTML
  */
 const PRODUCT_FRAGMENT = `#graphql
   fragment ProductFields on Product {
@@ -35,6 +45,27 @@ const PRODUCT_FRAGMENT = `#graphql
     featuredImage {
       url
       altText
+    }
+    variants(first: 50) {
+      nodes {
+        id
+        availableForSale
+        selectedOptions {
+          name
+          value
+        }
+        price {
+          amount
+          currencyCode
+        }
+        # Variant's own image (nullable). Drives the product-gallery image
+        # switch: when a buyer selects a variant, the gallery shows this image,
+        # falling back to the product's featuredImage when null.
+        image {
+          url
+          altText
+        }
+      }
     }
     priceRange {
       minVariantPrice {
@@ -46,61 +77,33 @@ const PRODUCT_FRAGMENT = `#graphql
         currencyCode
       }
     }
-    images(first: 10) {
-      nodes {
-        url
-        altText
-      }
-    }
-    variants(first: 50) {
-      nodes {
-        id
-        availableForSale
-        image {
-          url
-          altText
-        }
-        selectedOptions {
-          name
-          value
-        }
-      }
-    }
   }
 `;
 
 /**
- * Operation 1 — the collection list (/collection index).
+ * Operation 1 — collections index (category cards).
  *
- * Fetches each collection's card data: handle (route), title, and its image.
- * `description` is selected truncated inline (200 chars) because the fragment
- * deliberately omits it and `mapCollection` reads it with no fallback. When a
- * collection has no admin image, its FIRST PRODUCT's featured image is used
- * as a graceful fallback (`products(first: 1)`), so the card never renders an
- * empty grey box. Neither selection is part of the shared ProductFields
- * fragment (that fragment is card/PDP data — this is one inline field and a
- * one-product fallback); they are added inline here only.
+ * Fetches up to 50 collections. Each card needs a representative image; Shopify
+ * Collection images are nullable, so we also pull the first product's
+ * `featuredImage` as a fallback (the adapter picks `image ?? firstFeaturedImage`).
+ * `description` is selected truncated for the card blurb.
  *
- * Named operation `CollectionList` for Shopify query tracking. Takes no
- * variables.
+ * Named operation `CollectionList` for Shopify query tracking / deduplication.
  */
 export const COLLECTION_LIST_QUERY = `#graphql
   query CollectionList {
     collections(first: 50) {
       nodes {
-        id
         handle
         title
         description(truncateAt: 200)
         image {
           url
-          altText
         }
         products(first: 1) {
           nodes {
             featuredImage {
               url
-              altText
             }
           }
         }
@@ -110,24 +113,31 @@ export const COLLECTION_LIST_QUERY = `#graphql
 `;
 
 /**
- * Operation 2 — a single collection with its products (/collection/[handle]).
+ * Operation 1b — products within a single collection (category detail page).
  *
- * `products(first: 50)` covers any realistic per-collection product count; add
- * `pageInfo` pagination only if a collection ever grows past 50. Each product
- * reuses the shared ProductFields fragment.
+ * Fetches a collection by its handle and expands its products via the shared
+ * `ProductFields` fragment so the cards reuse the same adapter path as the
+ * product detail page. `description(truncateAt: 200)` is selected per-product
+ * for the card blurb (the fragment deliberately omits `description`).
+ *
+ * The `$handle` variable is typed `String!` and passed separately (not
+ * interpolated) to prevent injection and enable Shopify-side deduplication.
  *
  * Named operation `CollectionByHandle` for Shopify query tracking.
  */
 export const COLLECTION_BY_HANDLE_QUERY = `#graphql
   query CollectionByHandle($handle: String!) {
     collectionByHandle(handle: $handle) {
-      id
       handle
       title
       description
+      image {
+        url
+      }
       products(first: 50) {
         nodes {
           ...ProductFields
+          description(truncateAt: 200)
         }
       }
     }
@@ -136,14 +146,16 @@ export const COLLECTION_BY_HANDLE_QUERY = `#graphql
 `;
 
 /**
- * Operation 3 — a single product by handle (/product/[slug]).
+ * Operation 2 — product detail page.
  *
- * Adds detail-only fields to the shared fragment: the full image list (PDP
- * gallery), `options` (with merchant swatch data for the color checkpoints),
- * and the custom `rich_text` metafields (details_fabrication, product_care,
- * product_sizing) rendered by the disclosure sections. The metafields read
- * back as null when unset or unexposed — the UI treats null as "section
- * absent".
+ * Fetches a single product by its handle (the SEO slug used in the URL).
+ * Uses the same ProductFields fragment as the list query, plus the full
+ * `description` (no truncation) and the `images` connection (up to 10) for
+ * the gallery.
+ *
+ * The `$handle` variable is typed `String!` and passed separately (not
+ * interpolated into the query string) to prevent injection and enable
+ * Shopify-side query deduplication.
  *
  * Named operation `ProductByHandle` for Shopify query tracking.
  */
@@ -151,8 +163,8 @@ export const PRODUCT_BY_HANDLE_QUERY = `#graphql
   query ProductByHandle($handle: String!) {
     product(handle: $handle) {
       ...ProductFields
-      # Full gallery for the PDP (cards use only featuredImage).
-      images(first: 20) {
+      description
+      images(first: 10) {
         nodes {
           url
           altText
