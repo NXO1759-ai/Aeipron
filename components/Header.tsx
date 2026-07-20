@@ -92,7 +92,7 @@ export function Header() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMenuOpen(false)}
-              className="fixed inset-0 z-50 bg-apeiron-black/80 backdrop-blur-sm"
+              className="fixed inset-0 z-50 bg-apeiron-black/85"
               aria-hidden="true"
             />
             <motion.div
