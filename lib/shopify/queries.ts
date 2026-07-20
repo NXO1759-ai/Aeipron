@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Shopify Storefront API GraphQL queries (products / collections / cart).
+// Shopify Storefront API GraphQL operation strings (products + collections).
 //
 // These are DOCUMENTED STRINGS, not a generated client — each operation is
 // named for Shopify's query tracking and includes only the fields the UI
@@ -16,6 +16,8 @@
 // embeds a `?key=` token) and live only in the HTTP-only cookie.
 // ---------------------------------------------------------------------------
 
+import 'server-only';
+
 /**
  * Fields shared by the collection-products query and the product-detail
  * query, so cards and PDP never drift on what a "product" is. Used as a
@@ -30,7 +32,6 @@ const PRODUCT_FRAGMENT = `#graphql
     id
     handle
     title
-    description
     featuredImage {
       url
       altText
@@ -51,15 +52,10 @@ const PRODUCT_FRAGMENT = `#graphql
         altText
       }
     }
-    variants(first: 100) {
+    variants(first: 50) {
       nodes {
         id
-        title
         availableForSale
-        price {
-          amount
-          currencyCode
-        }
         image {
           url
           altText
@@ -76,24 +72,37 @@ const PRODUCT_FRAGMENT = `#graphql
 /**
  * Operation 1 — the collection list (/collection index).
  *
- * Fetches every collection's card data: handle (route), title, description,
- * and its image. `first: 250` is the Storefront API max — far above any real
- * collection count for this store.
+ * Fetches each collection's card data: handle (route), title, and its image.
+ * `description` is selected truncated inline (200 chars) because the fragment
+ * deliberately omits it and `mapCollection` reads it with no fallback. When a
+ * collection has no admin image, its FIRST PRODUCT's featured image is used
+ * as a graceful fallback (`products(first: 1)`), so the card never renders an
+ * empty grey box. Neither selection is part of the shared ProductFields
+ * fragment (that fragment is card/PDP data — this is one inline field and a
+ * one-product fallback); they are added inline here only.
  *
- * Named operation `Collections` for Shopify query tracking. Takes no
+ * Named operation `CollectionList` for Shopify query tracking. Takes no
  * variables.
  */
-export const COLLECTIONS_QUERY = `#graphql
-  query Collections {
-    collections(first: 250) {
+export const COLLECTION_LIST_QUERY = `#graphql
+  query CollectionList {
+    collections(first: 50) {
       nodes {
         id
         handle
         title
-        description
+        description(truncateAt: 200)
         image {
           url
           altText
+        }
+        products(first: 1) {
+          nodes {
+            featuredImage {
+              url
+              altText
+            }
+          }
         }
       }
     }
@@ -103,24 +112,20 @@ export const COLLECTIONS_QUERY = `#graphql
 /**
  * Operation 2 — a single collection with its products (/collection/[handle]).
  *
- * `products(first: 250)` is the Storefront API max for the nested connection;
- * far above any real per-collection product count. Each product reuses the
- * shared ProductFields fragment.
+ * `products(first: 50)` covers any realistic per-collection product count; add
+ * `pageInfo` pagination only if a collection ever grows past 50. Each product
+ * reuses the shared ProductFields fragment.
  *
  * Named operation `CollectionByHandle` for Shopify query tracking.
  */
 export const COLLECTION_BY_HANDLE_QUERY = `#graphql
   query CollectionByHandle($handle: String!) {
-    collection(handle: $handle) {
+    collectionByHandle(handle: $handle) {
       id
       handle
       title
       description
-      image {
-        url
-        altText
-      }
-      products(first: 250) {
+      products(first: 50) {
         nodes {
           ...ProductFields
         }
@@ -625,14 +630,15 @@ export const CART_DELIVERY_ADDRESSES_UPDATE_MUTATION = `#graphql
 `;
 
 /**
- * Operation 14 — persist the buyer's shipping-method choice on the cart.
+ * Operation 14 — select a shipping method (delivery option) on the cart.
  *
- * `deliveryGroupId` + `deliveryOptionHandle` are the two OPAQUE handles from
- * the cart's deliveryGroups (never constructed client-side). After this, the
- * cart's `cost.totalAmount` includes shipping (label may still be "Estimated").
- * From here, `cart.checkoutUrl` prefills contact + address + shipping method.
+ * `selectedDeliveryOptions` is `[CartSelectedDeliveryOptionInput!]!`; each
+ * entry pairs a `deliveryGroupId` with the chosen `deliveryOptionHandle` (the
+ * `handle` from a CartDeliveryOption read off deliveryGroups). After this
+ * mutation, the cart's `cost.totalAmount` reflects the selected shipping cost
+ * (still an estimate — tax/duty computed at Shopify's hosted checkout).
  *
- * Named operation `CartSelectedDeliveryOptionsUpdate` for Shopify tracking.
+ * Named operation `CartSelectedDeliveryOptionsUpdate` for Shopify query tracking.
  */
 export const CART_SELECTED_DELIVERY_OPTIONS_UPDATE_MUTATION = `#graphql
   mutation CartSelectedDeliveryOptionsUpdate($cartId: ID!, $selectedDeliveryOptions: [CartSelectedDeliveryOptionInput!]!) {
