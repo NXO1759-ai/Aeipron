@@ -111,6 +111,7 @@ export function ProductExperience({ product }: { product: Product }) {
                   alt={`${product.name}`}
                   fill
                   priority
+                  sizes="(min-width: 1024px) 50vw, 100vw"
                   className="object-cover"
                 />
               ) : (
@@ -136,7 +137,13 @@ export function ProductExperience({ product }: { product: Product }) {
                         isActive ? 'border-primary-cream' : 'border-transparent hover:border-ui-concrete/40'
                       }`}
                     >
-                      <Image src={src} alt={`${product.name} - View ${idx + 1}`} fill className="object-cover" />
+                      <Image
+                        src={src}
+                        alt={`${product.name} - View ${idx + 1}`}
+                        fill
+                        sizes="(min-width: 1024px) 80px, 64px"
+                        className="object-cover"
+                      />
                     </button>
                   );
                 })}

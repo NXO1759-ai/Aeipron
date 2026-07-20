@@ -34,7 +34,7 @@ export function CartLineItem({
     <div className="flex gap-4">
       <div className="relative h-24 w-20 flex-shrink-0 bg-primary-cream overflow-hidden">
         {item.image ? (
-          <Image src={item.image} alt={item.name} fill className="object-cover" />
+          <Image src={item.image} alt={item.name} fill sizes="80px" className="object-cover" />
         ) : null}
       </div>
       <div className="flex flex-1 flex-col justify-between">

@@ -389,7 +389,7 @@ export function CheckoutExperience({ cart }: CheckoutExperienceProps) {
               <div key={item.lineId} className="flex gap-4 items-center">
                 <div className="relative w-16 h-20 bg-ui-concrete/20 flex-shrink-0">
                   {item.image ? (
-                    <Image src={item.image} alt={item.name} fill className="object-cover" />
+                    <Image src={item.image} alt={item.name} fill sizes="64px" className="object-cover" />
                   ) : null}
                   <span className="absolute -top-2 -right-2 bg-primary-obsidian text-primary-cream w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold">
                     {item.quantity}
