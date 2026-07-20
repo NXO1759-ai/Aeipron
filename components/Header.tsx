@@ -112,7 +112,7 @@ export function Header() {
               <div className="flex items-center justify-between p-6 h-24 border-b border-ui-concrete/20">
                 <div className="flex flex-col items-start">
                   <span className="text-xl font-bold uppercase tracking-[0.2em] text-apeiron-ivory leading-none">
-                    Aeipron
+                    Apeiron
                   </span>
                   <span className="text-[10px] text-apeiron-ivory tracking-[0.3em] mt-1 leading-none">
                     アペイロン

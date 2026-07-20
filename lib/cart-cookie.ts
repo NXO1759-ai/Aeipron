@@ -23,7 +23,11 @@
 import 'server-only';
 import { cookies } from 'next/headers';
 
-/** The HTTP-only cookie name holding the opaque Shopify cart id. */
+/** The HTTP-only cookie name holding the opaque Shopify cart id.
+ * NOTE: the value contains the historical misspelling "aeipron". It is
+ * intentionally NOT renamed — changing the name would orphan every existing
+ * shopper's cart cookie (their bag would appear empty until the next add).
+ * The name is never user-visible; keep it for cart continuity. */
 export const CART_COOKIE = 'aeipron-cart-id';
 
 /** Cookie lifetime: 14 days, in seconds. */

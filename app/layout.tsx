@@ -17,7 +17,7 @@ const META_LOGO_URL =
   'https://cdn.shopify.com/s/files/1/0792/2286/6117/files/favicon.jpg?v=1784278511';
 
 export const metadata: Metadata = {
-  title: 'Aeipron - Balance of Street & Luxury',
+  title: 'Apeiron - Balance of Street & Luxury',
   description: 'Limitless and infinite. High-Density 3D Ink Print Technology.',
   icons: {
     icon: META_LOGO_URL,

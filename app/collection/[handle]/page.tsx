@@ -34,10 +34,13 @@ export default async function CollectionDetailPage({
             <Link href="/collection" className="hover:text-apeiron-ivory text-ui-concrete transition-colors">
               ← All
             </Link>
+            {/* Filter / Sort controls — hidden until wired to real behavior
+                (they were dead buttons with no handler). Re-enable with logic:
             <span className="text-ui-concrete/50">/</span>
             <button type="button" className="hover:text-apeiron-ivory text-ui-concrete transition-colors">Filter</button>
             <span className="text-ui-concrete/50">/</span>
             <button type="button" className="hover:text-apeiron-ivory text-ui-concrete transition-colors">Sort</button>
+            */}
           </div>
         </div>
 
