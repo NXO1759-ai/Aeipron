@@ -21,7 +21,7 @@ import { Disclosure } from '@/components/Disclosure';
 export const metadata: Metadata = {
   title: 'Help Center — Apeiron',
   description:
-    'Answers to common questions about orders, shipping, returns, product care, and sizing at Apeiron.',
+    'Answers to common questions about orders, shipping, and returns at Apeiron.',
 };
 
 // Slugify a section heading into a stable, DOM-id-safe value (no spaces / `&`).

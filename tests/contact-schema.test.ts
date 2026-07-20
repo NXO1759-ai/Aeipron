@@ -3,8 +3,9 @@ import { contactFormSchema } from '@/lib/contact-schema';
 
 // ---------------------------------------------------------------------------
 // Contact-form zod schema — pure validation tests (no DOM needed).
-// Verifies required fields, email format, optional phone, and message length
-// bounds. Mirrors the checkout-schema test style.
+// Verifies required fields, email format, optional phone, message length
+// bounds, and the optional honeypot / time-trap fields. Mirrors the
+// checkout-schema test style.
 // ---------------------------------------------------------------------------
 
 const VALID_BASE = {
@@ -66,5 +67,30 @@ describe('contactFormSchema — format + length', () => {
 
   it('accepts an empty optional phone', () => {
     expect(contactFormSchema.safeParse(payload({ phone: '' })).success).toBe(true);
+  });
+});
+
+describe('contactFormSchema — honeypot + time-trap fields', () => {
+  it('accepts a payload with no website / startedAt (both optional)', () => {
+    const r = contactFormSchema.safeParse(payload());
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.website).toBeUndefined();
+      expect(r.data.startedAt).toBeUndefined();
+    }
+  });
+
+  it('accepts a honeypot value and a mount timestamp', () => {
+    const r = contactFormSchema.safeParse({ ...payload(), website: 'https://spam.example', startedAt: 1720000000000 });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.website).toBe('https://spam.example');
+      expect(r.data.startedAt).toBe(1720000000000);
+    }
+  });
+
+  it('rejects a non-numeric startedAt', () => {
+    const r = contactFormSchema.safeParse({ ...payload(), startedAt: 'yesterday' });
+    expect(r.success).toBe(false);
   });
 });
