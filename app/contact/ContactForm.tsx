@@ -41,7 +41,7 @@ export function ContactForm() {
     formState: { errors },
   } = useForm<ContactForm>({
     resolver: zodResolver(contactFormSchema),
-    defaultValues: { name: '', email: '', phone: '', message: '' },
+    defaultValues: { name: '', email: '', phone: '', message: '', website: '' },
   });
 
   const onSubmit = async (data: ContactForm) => {
@@ -120,6 +120,24 @@ export function ContactForm() {
           {actionError}
         </p>
       ) : null}
+
+      {/* Honeypot — bot trap. Rendered far off-screen (NOT display:none, which
+          smarter bots skip), removed from the tab order and the accessibility
+          tree, so a human never sees, tabs into, or fills it. A non-empty
+          value tells the server action to silently drop the submission. */}
+      <div
+        aria-hidden="true"
+        style={{ position: 'absolute', left: '-9999px', top: '-9999px', width: 0, height: 0, overflow: 'hidden' }}
+      >
+        <label htmlFor="contact-website">Website</label>
+        <input
+          id="contact-website"
+          type="text"
+          tabIndex={-1}
+          autoComplete="off"
+          {...register('website')}
+        />
+      </div>
 
       <button
         type="submit"

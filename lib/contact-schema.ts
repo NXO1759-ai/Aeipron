@@ -40,6 +40,11 @@ export const contactFormSchema = z.object({
     .trim()
     .min(1, 'Message is required')
     .max(5000, 'Message is too long (5000 character max)'),
+  // Honeypot — an invisible field that humans never fill but bots
+  // indiscriminately do. Optional so older clients / direct API posts without
+  // it still validate; the server action silently drops submissions where it
+  // is non-empty (fake success, nothing written to Shopify).
+  website: z.string().max(200).optional(),
 });
 
 /** The parsed, validated contact-form payload. */

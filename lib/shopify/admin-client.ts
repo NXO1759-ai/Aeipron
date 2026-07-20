@@ -31,6 +31,17 @@
 // reason the Storefront client has the same fallback). The curl fallback
 // includes built-in retry (--retry 3) and a hard timeout.
 //
+// Curl fallback hardening (mirrors lib/shopify/client.ts):
+//   - Runs ASYNCHRONOUSLY (execFile, not execFileSync) so a slow Shopify edge
+//     can never block the Node event loop for every in-flight request on the
+//     instance.
+//   - The Admin token (far more powerful than the Storefront token — it can
+//     WRITE store data) and the request body travel over the child's stdin
+//     (`--config -`), NEVER the argument list, so nothing can scrape them
+//     from /proc or `ps`.
+//   - `--fail` makes curl exit non-zero on HTTP errors, so a 4xx/5xx page is
+//     never mistaken for a GraphQL response body.
+//
 // Top-level GraphQL `errors` (auth, malformed query) throw
 // `ShopifyAdminClientError`; mutation-level `userErrors` (returned inside
 // `data`, e.g. an unknown metaobject type) are NOT thrown here — they are
@@ -39,7 +50,7 @@
 
 import 'server-only';
 import https from 'node:https';
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 
 export class ShopifyAdminClientError extends Error {
   constructor(message: string, public readonly status?: number) {
@@ -108,7 +119,7 @@ export async function adminRequest<T>(
 
     // --- Attempt 2: curl fallback (reliable path) ---
     try {
-      responseBody = curlRequest(endpoint, token, body);
+      responseBody = await curlRequest(endpoint, token, body);
     } catch {
       throw new ShopifyAdminClientError('Shopify Admin API request failed');
     }
@@ -186,37 +197,67 @@ function httpsRequest(endpoint: string, token: string, body: string): Promise<st
 }
 
 /**
- * curl-based request as a fallback. Uses execFileSync with --retry and a hard
- * --max-time. curl's libcurl handles DNS, TLS, and connection retries
- * independently of Node's networking stack, making it reliable in environments
- * where Node's https module fails.
+ * Escape a value for curl's config-file syntax (double-quoted, C-style
+ * escapes). JSON.stringify output never contains raw control characters, so
+ * escaping backslashes and double quotes is sufficient.
  */
-function curlRequest(endpoint: string, token: string, body: string): string {
-  const result = execFileSync(
-    'curl',
-    [
-      '-s',
-      '--max-time', String(CURL_TIMEOUT_SEC),
-      '--retry', String(CURL_MAX_RETRIES),
-      '--retry-delay', '1',
-      '--retry-connrefused',
-      '-X', 'POST',
-      endpoint,
-      '-H', 'Content-Type: application/json',
-      '-H', `X-Shopify-Access-Token: ${token}`,
-      '-H', 'Accept: application/json',
-      '-d', body,
-    ],
-    {
-      encoding: 'utf-8',
-      timeout: (CURL_TIMEOUT_SEC + 5) * 1000, // Node-level timeout as a safety net
-      maxBuffer: 10 * 1024 * 1024, // 10MB max response
-    },
-  );
+function escapeCurlConfigValue(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
 
-  if (!result) {
-    throw new ShopifyAdminClientError('Shopify Admin API request failed: empty response');
-  }
+/**
+ * curl-based request as a fallback — ASYNC (never blocks the event loop) with
+ * --retry and a hard --max-time. curl's libcurl handles DNS, TLS, and
+ * connection retries independently of Node's networking stack, making it
+ * reliable in environments where Node's https module fails.
+ *
+ * The auth header and the POST body are passed via stdin (`--config -`) so
+ * secrets never appear in the process argument list. `--fail` turns HTTP
+ * error statuses into a curl failure instead of a bogus "response body".
+ */
+function curlRequest(endpoint: string, token: string, body: string): Promise<string> {
+  const config = [
+    `header = "X-Shopify-Access-Token: ${escapeCurlConfigValue(token)}"`,
+    `data = "${escapeCurlConfigValue(body)}"`,
+    '',
+  ].join('\n');
 
-  return result;
+  return new Promise<string>((resolve, reject) => {
+    const child = execFile(
+      'curl',
+      [
+        '-s',
+        '--fail',
+        '--max-time', String(CURL_TIMEOUT_SEC),
+        '--retry', String(CURL_MAX_RETRIES),
+        '--retry-delay', '1',
+        '--retry-connrefused',
+        '-X', 'POST',
+        endpoint,
+        '-H', 'Content-Type: application/json',
+        '-H', 'Accept: application/json',
+        '--config', '-', // read the auth header + body from stdin (a pipe)
+      ],
+      {
+        encoding: 'utf-8',
+        timeout: (CURL_TIMEOUT_SEC + 5) * 1000, // Node-level timeout as a safety net
+        maxBuffer: 10 * 1024 * 1024, // 10MB max response
+      },
+      (error, stdout) => {
+        if (error) {
+          reject(new ShopifyAdminClientError('Shopify Admin API request failed: curl error'));
+          return;
+        }
+        if (!stdout) {
+          reject(new ShopifyAdminClientError('Shopify Admin API request failed: empty response'));
+          return;
+        }
+        resolve(stdout);
+      },
+    );
+
+    // The token + body travel over stdin — never argv.
+    child.stdin?.write(config);
+    child.stdin?.end();
+  });
 }

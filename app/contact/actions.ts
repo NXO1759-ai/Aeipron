@@ -31,11 +31,10 @@
 //     `server-only`, so a client import of this action cannot leak them.
 //   - Internal detail (Admin errors, userErrors, status) is logged
 //     server-side only; the client gets a generic, non-leaking message.
-//   - There is NO rate limiting in this action. If spam becomes a problem, add
-//     an in-memory rate limit keyed by IP/email, hCaptcha / reCAPTCHA on the
-//     client form, or move to a metaobject definition with Shopify's spam
-//     filters. (The Admin API itself authenticates the caller, which prevents
-//     random public abuse — unlike the tokenless `/contact` endpoint.)
+//   - Bot/spam defense is a HONEYPOT: the form renders an invisible `website`
+//     field that humans never fill; a non-empty value drops the submission
+//     with a fake success (nothing is written to Shopify). If spam volume
+//     outgrows it, add an IP/email rate limit or a captcha challenge.
 // ---------------------------------------------------------------------------
 
 import { contactFormSchema } from '@/lib/contact-schema';
@@ -78,7 +77,16 @@ export async function submitContactMessage(
   if (!parsed.success) {
     return { ok: false, error: 'Please check the highlighted fields and try again.' };
   }
-  const { name, email, phone, message } = parsed.data;
+  const { name, email, phone, message, website } = parsed.data;
+
+  // Honeypot check: the `website` field is invisible to humans (rendered
+  // off-screen, aria-hidden, tabIndex -1) so only bots filling every field
+  // trip it. Pretend success and drop the submission — nothing is written to
+  // Shopify, and the bot gets no signal to adapt. Logged server-side only.
+  if (website) {
+    console.warn('[contact] honeypot tripped — dropping bot submission');
+    return { ok: true };
+  }
 
   const token = process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN;
   if (!token) {
