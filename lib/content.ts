@@ -42,17 +42,17 @@ export function getHelpContent(): HelpFaqSection[] {
         {
           question: 'How long until my order ships?',
           answer:
-            'Orders are processed within 1–2 business days. You will receive a confirmation email with tracking once your order leaves our New York studio.',
+            'Orders leave our studio within 1–2 business days. You\'ll get tracking by email the moment yours is on its way.\nBecause SKUs are limited, we pack and ship in the order in which purchases come in.',
         },
         {
           question: 'Can I change or cancel my order after placing it?',
           answer:
-            'We begin processing quickly, so changes or cancellations are not guaranteed. Email us as soon as possible and we will do our best to catch it before it ships.',
+            'Yes, if you\'re quick. Email us within 24 hours of ordering and we\'ll update the address, swap a size, or cancel outright.\nAfter that window, the order is usually already packed, but reach out anyway, and we\'ll do what we can.',
         },
         {
           question: 'Do you ship internationally?',
           answer:
-            'Yes. We ship worldwide. Shipping costs and duties are calculated at checkout based on your destination.',
+            'Yes, worldwide. International orders are shipped; your local customs office may charge import duties or taxes on arrival, and those are on you.\nIt\'s the standard arrangement for international apparel; we don\'t control the rates and can\'t predict them.',
         },
       ],
     },
@@ -62,12 +62,12 @@ export function getHelpContent(): HelpFaqSection[] {
         {
           question: 'How much does shipping cost?',
           answer:
-            'Complimentary express shipping is included on all orders over $200. Below that, a flat rate is applied at checkout.',
+            'Domestic shipping is free on orders over $70, and courier rates apply to orders below that.\nInternational rates are calculated at checkout by destination and weight; you\'ll see the exact number before you pay.',
         },
         {
           question: 'When will my order arrive?',
           answer:
-            'Domestic orders typically arrive in 2–4 business days. International delivery times vary by destination, usually 5–10 business days.',
+            'Domestic: 3–5 business days from shipment. International: 7–14 business days, depending on destination and customs.\nEvery order includes tracking, so you\'ll never have to guess.',
         },
       ],
     },
@@ -77,12 +77,12 @@ export function getHelpContent(): HelpFaqSection[] {
         {
           question: 'What is your return policy?',
           answer:
-            'Unworn items in original condition may be returned within 14 days of delivery for a full refund.',
+            'You have 14 days from delivery to return unworn, unwashed pieces with tags attached for a full refund to your original payment method.\nThat\'s the standard window, and we keep it simple: no restocking fees, no interrogation.\nOne note: because SKUs are limited runs, returned pieces go through inspection before they re-enter stock.',
         },
         {
           question: 'How do I start a return?',
           answer:
-            'Email us with your order number and we will send a return authorization and shipping instructions.',
+            'Email us hello@wearapeiron.com with your order number and what you\'re sending back.\nWe\'ll reply within two business days with a prepaid domestic return label [US only] and instructions.\nRefunds are processed within [5–10 business days] of the return arriving.',
         },
       ],
     },
