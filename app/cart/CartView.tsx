@@ -5,7 +5,9 @@ import { useCart } from '@/store/use-cart';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { formatCurrency } from '@/lib/utils';
 import { CartLineItem } from '@/components/CartLineItem';
+import { ShippingProtection } from '@/components/cart/ShippingProtection';
 import { useCheckoutRedirect } from '@/hooks/use-checkout-redirect';
+import { merchandiseLinesOf, protectionQuantityOf } from '@/lib/protection';
 
 // ---------------------------------------------------------------------------
 // CartView — the client island for the /cart page.
@@ -45,9 +47,11 @@ export function CartView() {
 
   // Pre-hydration baseline: render zero so SSR and the first client paint
   // agree. Once hydrated, the store reflects the Shopify cart (rehydrated by
-  // CartHydrator on mount).
-  const lines = hydrated ? items : [];
-  const count = hydrated ? totalQuantity : 0;
+  // CartHydrator on mount). The protection product (Navidium) never renders
+  // as a line and never counts toward "Bag (n)" — same rule as the drawer.
+  const allLines = hydrated ? items : [];
+  const lines = merchandiseLinesOf(allLines);
+  const count = hydrated ? totalQuantity - protectionQuantityOf(allLines) : 0;
   const subtotal = hydrated ? formatCurrency(subtotalAmount, currencyCode) : formatCurrency(0, currencyCode);
   const total = hydrated ? formatCurrency(totalAmount, currencyCode) : formatCurrency(0, currencyCode);
 
@@ -86,7 +90,7 @@ export function CartView() {
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_22rem] gap-10 lg:gap-16">
-        {/* Line items */}
+        {/* Line items + the protection toggle (Navidium) */}
         <div className="space-y-8">
           {lines.map((item) => (
             <CartLineItem
@@ -97,6 +101,11 @@ export function CartView() {
               onRemove={removeItem}
             />
           ))}
+          {lines.length > 0 && (
+            <div className="border border-ui-concrete/20 bg-primary-obsidian">
+              <ShippingProtection active={hydrated} />
+            </div>
+          )}
         </div>
 
         {/* Order summary */}
