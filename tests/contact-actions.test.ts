@@ -201,7 +201,7 @@ describe('submitContactMessage — metaobject write', () => {
     vi.stubEnv('CONTACT_METAOBJECT_TYPE', 'custom_contact');
     mockAdminRequest.mockResolvedValueOnce(createdResponse());
     await submitContactMessage(VALID_INPUT);
-    const [, vars] = mockAdminRequest.mock.calls[0];
+    const [, vars] = mockAdminRequest.mock.calls[0] as [string, { metaobject: { type: string } }];
     expect(vars.metaobject.type).toBe('custom_contact');
   });
 });

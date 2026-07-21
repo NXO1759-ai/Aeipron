@@ -6,6 +6,9 @@ import { useCart } from '@/store/use-cart';
 import { resolveSelectedVariant, resolvePreviewVariant, variantDescriptor } from '@/lib/product';
 import { RichText } from '@/components/RichText';
 import { ColorSwatchGroup, isColorGroup } from '@/components/product/ColorSwatch';
+import { SmoothDisclosure } from '@/components/product/SmoothDisclosure';
+import { ReviewsSection } from '@/components/product/ReviewsSection';
+import type { ProductReviewData } from '@/lib/judge-me';
 import type { Product, ProductOption } from '@/lib/types';
 
 /** Shown inside a disclosure when its metafield has no value yet — the store
@@ -32,7 +35,7 @@ const NO_CONTENT_MESSAGE = 'No content available yet.';
 // quantity stepper / add-to-bag reuse the Phase 2 cart store verbatim.
 // ---------------------------------------------------------------------------
 
-export function ProductExperience({ product }: { product: Product }) {
+export function ProductExperience({ product, reviewData }: { product: Product; reviewData: ProductReviewData }) {
   // One selection per option group, keyed by option name (e.g. "Size", "Color").
   const [selections, setSelections] = useState<Record<string, string>>({});
   // A manually-browsed thumbnail index, or null when the variant drives the image.
@@ -239,37 +242,38 @@ export function ProductExperience({ product }: { product: Product }) {
               {selectedVariantId ? 'Add to bag' : 'Select an option'}
             </button>
 
-            {/* Additional Info — native disclosure widgets (keyboard + touch
-                accessible), driven by Shopify `rich_text` metafields. All three
-                sections always render so the structure is stable across products.
-                When a metafield has no value yet (null/undefined — the store
-                hasn't filled it in, or its definition isn't exposed to the
-                Storefront API), the disclosure shows NO_CONTENT_MESSAGE instead
+            {/* Additional Info — animated disclosure rows (SmoothDisclosure:
+                compositor-only grid-row transition, like the cart drawer). The
+                three rich-text sections are driven by Shopify `rich_text`
+                metafields and always render so the structure is stable across
+                products; when a metafield has no value yet (null/undefined —
+                the store hasn't filled it in, or its definition isn't exposed
+                to the Storefront API), the row shows NO_CONTENT_MESSAGE instead
                 of disappearing. Shipping & Returns was removed per client
                 direction. The metafield value is a `rich_text` JSON string
-                rendered by <RichText> (NOT HTML — see components/RichText). */}
+                rendered by <RichText> (NOT HTML — see components/RichText).
+                The fourth row, Reviews, pairs the fit scale (custom.review
+                json metafield → product.fit) with the Judge.me review data
+                fetched server-side and passed in as props. */}
             <div className="mt-16 space-y-6 border-t border-ui-concrete/20 pt-8">
               {[
                 { title: 'Details & Fabrication', value: product.detailsFabrication },
                 { title: 'Product Care', value: product.productCare },
                 { title: 'Product Sizing', value: product.productSizing },
               ].map((section) => (
-                <details key={section.title} className="border-b border-ui-concrete/20 pb-6 group">
-                  <summary className="uppercase tracking-widest font-bold text-sm cursor-pointer list-none flex items-center justify-between hover:text-accent-energy transition-colors">
-                    {section.title}
-                    <span className="text-ui-concrete transition-transform group-open:rotate-45" aria-hidden="true">
-                      +
-                    </span>
-                  </summary>
-                  <div className="text-sm text-ui-concrete mt-2 space-y-2">
-                    {section.value ? (
+                <SmoothDisclosure key={section.title} summary={section.title}>
+                  {section.value ? (
+                    <div className="space-y-2">
                       <RichText value={section.value} />
-                    ) : (
-                      <p className="italic">{NO_CONTENT_MESSAGE}</p>
-                    )}
-                  </div>
-                </details>
+                    </div>
+                  ) : (
+                    <p className="italic">{NO_CONTENT_MESSAGE}</p>
+                  )}
+                </SmoothDisclosure>
               ))}
+              <SmoothDisclosure summary="Reviews">
+                <ReviewsSection fit={product.fit ?? 0} data={reviewData} />
+              </SmoothDisclosure>
             </div>
           </div>
         </div>
