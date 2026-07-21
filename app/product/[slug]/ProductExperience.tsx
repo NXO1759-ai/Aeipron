@@ -4,7 +4,9 @@ import { useState, useCallback } from 'react';
 import Image from 'next/image';
 import { useCart } from '@/store/use-cart';
 import { resolveSelectedVariant, resolvePreviewVariant, variantDescriptor } from '@/lib/product';
+import { splitOptionValues } from '@/lib/size-selector';
 import { RichText } from '@/components/RichText';
+import { SizeSelector } from '@/components/SizeSelector';
 import { ColorSwatchGroup, isColorGroup } from '@/components/product/ColorSwatch';
 import { SmoothDisclosure } from '@/components/product/SmoothDisclosure';
 import { ReviewsSection } from '@/components/product/ReviewsSection';
@@ -169,9 +171,10 @@ export function ProductExperience({ product, reviewData }: { product: Product; r
 
             {product.options.map((group: ProductOption) =>
               // The Color group renders as visual color checkpoints (round
-              // dots); every other group (Size, etc.) keeps the text buttons.
-              // Both drive the SAME selections Record + resolveSelectedVariant,
-              // so the cart still resolves the exact variant GID.
+              // dots); every other group (Size, etc.) renders as the
+              // sliding-marker SizeSelector. Both drive the SAME selections
+              // Record + resolveSelectedVariant, so the cart still resolves
+              // the exact variant GID.
               isColorGroup(group.name) ? (
                 <ColorSwatchGroup
                   key={group.name}
@@ -195,36 +198,18 @@ export function ProductExperience({ product, reviewData }: { product: Product; r
                     */}
                   </div>
 
-                  <div className="flex flex-wrap gap-3">
-                    {group.values.map((v) => {
-                      const isSelected = selections[group.name] === v.value;
-                      return (
-                        <button
-                          type="button"
-                          key={v.value}
-                          disabled={!v.inStock}
-                          aria-pressed={isSelected}
-                          aria-label={`${group.name} ${v.value}${!v.inStock ? ', out of stock' : ''}`}
-                          onClick={() => selectOption(group.name, v.value)}
-                          className={`
-                            min-w-[3.5rem] px-4 py-3 text-sm font-bold uppercase tracking-widest transition-colors relative
-                            ${!v.inStock ? 'text-ui-concrete border-ui-concrete/30 cursor-not-allowed bg-transparent' : 'cursor-pointer'}
-                            ${v.inStock && !isSelected ? 'border-primary-cream/50 text-primary-cream hover:bg-primary-cream/10 border' : ''}
-                            ${isSelected ? 'bg-primary-cream text-primary-obsidian border border-primary-cream' : ''}
-                            ${!v.inStock ? 'border border-ui-concrete/30 overflow-hidden' : ''}
-                          `}
-                        >
-                          {v.value}
-                          {!v.inStock && (
-                            <span
-                              className="absolute top-1/2 left-0 w-full h-[1px] bg-ui-concrete/50 transform -translate-y-1/2 -rotate-45"
-                              aria-hidden="true"
-                            />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {/* Sliding-marker selector (components/SizeSelector): sold-out
+                      values are strike-through + aria-disabled and skipped by
+                      keyboard nav; picking a value writes into the same
+                      `selections` Record the old button row used. Uncontrolled —
+                      the selector owns its pill state and reports changes up via
+                      onChange, exactly like the demo page. */}
+                  <SizeSelector
+                    label={`Select ${group.name}`}
+                    {...splitOptionValues(group.values)}
+                    defaultSize={selections[group.name]}
+                    onChange={(value) => selectOption(group.name, value)}
+                  />
                 </div>
               ),
             )}
