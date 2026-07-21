@@ -316,3 +316,19 @@ export interface ShopifyCartSelectedDeliveryOptionsUpdateResponse {
     warnings: unknown[];
   };
 }
+
+// ---------------------------------------------------------------------------
+// Metaobjects (Help Center content).
+// ---------------------------------------------------------------------------
+
+/** One metaobject entry as returned by the `metaobjects` connection. */
+export interface ShopifyMetaobjectNode {
+  fields: { key: string; value: string | null }[];
+}
+
+/** Response shape for the HelpQuestions query. */
+export interface ShopifyMetaobjectsResponse {
+  metaobjects: {
+    edges: { node: ShopifyMetaobjectNode }[];
+  };
+}
