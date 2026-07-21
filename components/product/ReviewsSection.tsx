@@ -43,7 +43,7 @@ function ThumbCounter({ direction, count, label }: { direction: 'up' | 'down'; c
       <ThumbIcon direction={direction} />
       <span
         aria-hidden="true"
-        className="absolute -top-2 -right-3 min-w-5 rounded-full bg-accent-energy px-1 text-center font-mono text-[10px] font-bold leading-5 text-primary-obsidian"
+        className="absolute -top-2 -right-3 min-w-5 rounded-full bg-ui-concrete/30 px-1 text-center font-mono text-[10px] font-bold leading-5 text-primary-cream"
       >
         {count}
       </span>
