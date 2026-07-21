@@ -16,7 +16,7 @@
 // under Navidium's own product title ('Protected Checkout').
 //
 // Presentation mirrors the Navidium widget format: shield mark, "Shipping
-// insurance +$X" label, and the peace-of-mind copy. When NAVIDIUM_API_URL is
+// insurance +$X" label, and the coverage copy. When NAVIDIUM_API_URL is
 // unset the action returns null and this renders nothing — the feature is
 // invisible on stores without Navidium.
 // ---------------------------------------------------------------------------
@@ -163,8 +163,7 @@ export function ShippingProtection({ active }: { active: boolean }) {
         </button>
       </div>
       <p className="mt-2 text-xs leading-relaxed text-ui-concrete">
-        Get peace of mind with Shipping Protection in the event your delivery is Lost, Stolen or
-        Damaged during transit.
+        Enjoy peace of mind with 100% coverage for lost, damaged, or stolen packages.
       </p>
     </div>
   );
