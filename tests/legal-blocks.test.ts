@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseLegalHtml,
+  redactBlocks,
   resolveInlineActions,
   structureLegalText,
   type LegalBlock,
@@ -16,6 +17,7 @@ import { LEGAL_DOCUMENTS } from '@/lib/legal-content';
 //   parseLegalHtml        — the Shopify editor HTML subset (refund / terms)
 //   structureLegalText    — plain text → meta / headings / lists (privacy)
 //   resolveInlineActions  — the terms' "[LINK]" placeholders → dialog actions
+//   redactBlocks          — verbatim lines stripped at render (merchant note)
 //
 // The real document bodies from lib/legal-content are exercised end-to-end
 // here, so a content edit that breaks the parsers fails loudly.
@@ -236,5 +238,60 @@ describe('resolveInlineActions — the terms\' "[LINK]" placeholders', () => {
     // The sentences still read exactly as written around the actions.
     expect(textValues(blocks)).toContain('Terms of Service and our Privacy Policy. If you do not agree');
     expect(textValues(blocks)).toContain('in accordance with our Refund Policy.');
+  });
+});
+
+describe('redactBlocks — render-time removal of verbatim lines', () => {
+  it('removes the needle and drops the emptied run, collapsing breaks', () => {
+    const blocks: LegalBlock[] = [
+      {
+        kind: 'paragraph',
+        children: [
+          { kind: 'text', value: 'SECTION 9', bold: true },
+          { kind: 'break' },
+          { kind: 'text', value: '[NOTE TO MERCHANT: secret] ' },
+          { kind: 'break' },
+          { kind: 'text', value: 'Visible body.' },
+        ],
+      },
+    ];
+    const out = redactBlocks(blocks, ['[NOTE TO MERCHANT: secret]']);
+    expect(out[0]).toEqual({
+      kind: 'paragraph',
+      children: [
+        { kind: 'text', value: 'SECTION 9', bold: true },
+        { kind: 'break' },
+        { kind: 'text', value: 'Visible body.' },
+      ],
+    });
+  });
+
+  it('drops a paragraph left with no content and trims trailing breaks', () => {
+    const blocks: LegalBlock[] = [
+      { kind: 'paragraph', children: [{ kind: 'text', value: 'gone' }, { kind: 'break' }] },
+      { kind: 'paragraph', children: [{ kind: 'text', value: 'kept' }] },
+    ];
+    const out = redactBlocks(blocks, ['gone']);
+    expect(out).toEqual([{ kind: 'paragraph', children: [{ kind: 'text', value: 'kept' }] }]);
+  });
+
+  it('is a no-op for empty needle lists and untouched runs', () => {
+    const blocks: LegalBlock[] = [
+      { kind: 'paragraph', children: [{ kind: 'text', value: 'a b' }] },
+    ];
+    expect(redactBlocks(blocks, [])).toBe(blocks);
+    expect(redactBlocks(blocks, ['not present'])).toEqual(blocks);
+  });
+
+  it('strips the real terms merchant note from the rendered tree', () => {
+    const doc = LEGAL_DOCUMENTS.terms;
+    const rendered = redactBlocks(
+      resolveInlineActions(parseLegalHtml(doc.body), doc.inlineActions ?? []),
+      doc.redactions ?? [],
+    );
+    expect(textValues(rendered)).not.toContain('NOTE TO MERCHANT');
+    // …while the surrounding Section 9 copy renders intact, heading first.
+    expect(textValues(rendered)).toContain('SECTION 9 - RELATIONSHIP WITH SHOPIFY');
+    expect(textValues(rendered)).toContain('Apeiron is powered by Shopify');
   });
 });

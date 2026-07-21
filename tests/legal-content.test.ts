@@ -37,10 +37,21 @@ describe('lib/legal-content', () => {
   });
 
   it('pins the pending-merchant-input placeholders (left verbatim on purpose)', () => {
-    // The returns address must be filled in by the merchant — never invented.
-    expect(LEGAL_DOCUMENTS.refund.body).toContain('[INSERT RETURN ADDRESS]');
+    // The returns address is still to be decided — never invented.
+    expect(LEGAL_DOCUMENTS.refund.body).toContain('[TBD]');
     // The privacy opt-out link is unlinked in the source text.
     expect(LEGAL_DOCUMENTS.privacy.body).toContain('Shopify Privacy Portal Link');
+  });
+
+  it('keeps the terms merchant note in the verbatim source, redacted at render', () => {
+    const { body, redactions } = LEGAL_DOCUMENTS.terms;
+    // The source body stays verbatim…
+    expect(body).toContain('[NOTE TO MERCHANT:');
+    // …and exactly that instruction line is configured for render-time removal.
+    expect(redactions).toHaveLength(1);
+    for (const needle of redactions ?? []) {
+      expect(body).toContain(needle);
+    }
   });
 
   it('terms ships exactly four "[LINK]" placeholders with matching inlineActions', () => {

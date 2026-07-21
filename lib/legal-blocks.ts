@@ -17,6 +17,8 @@
 //
 // resolveInlineActions converts the Terms' "[LINK]" placeholders into
 // `action` inline nodes (in-dialog navigation), in document order.
+// redactBlocks strips verbatim source lines (e.g. the Terms' "[NOTE TO
+// MERCHANT: …]" instruction) from the rendered tree.
 //
 // No React, no server-only imports — unit-tested in the node Vitest env
 // (tests/legal-blocks.test.ts). Never throws on malformed input: worst case
@@ -243,6 +245,65 @@ export function structureLegalText(text: string, headings: readonly string[] = [
   }
   flush();
   return blocks;
+}
+
+// ---------------------------------------------------------------------------
+// Render-time redaction (e.g. the Terms' "[NOTE TO MERCHANT: …]" instruction)
+// ---------------------------------------------------------------------------
+
+/**
+ * Remove verbatim substrings from the rendered tree while the source `body`
+ * stays untouched. Text runs emptied by a redaction are dropped, runs of
+ * `<br>`s collapse to one, and paragraphs left with no content disappear —
+ * so a redacted line never leaves a hole in the layout.
+ */
+export function redactBlocks(blocks: LegalBlock[], needles: readonly string[]): LegalBlock[] {
+  const terms = needles.filter((needle) => needle.length > 0);
+  if (!terms.length) return blocks;
+
+  const redactRun = (run: LegalInline): LegalInline | null => {
+    if (run.kind === 'text') {
+      let value = run.value;
+      for (const needle of terms) value = value.split(needle).join('');
+      return value.trim() ? { ...run, value } : null;
+    }
+    if (run.kind === 'link') {
+      const children = run.children
+        .map(redactRun)
+        .filter((child): child is LegalInline => child !== null);
+      return children.length ? { ...run, children } : null;
+    }
+    return run; // breaks and actions pass through
+  };
+
+  const redactChildren = (children: LegalInline[]): LegalInline[] => {
+    const out: LegalInline[] = [];
+    for (const run of children) {
+      const redacted = redactRun(run);
+      if (redacted === null) continue;
+      if (redacted.kind === 'break' && (out.length === 0 || out[out.length - 1].kind === 'break')) {
+        continue; // no leading or doubled breaks
+      }
+      out.push(redacted);
+    }
+    while (out.length > 0 && out[out.length - 1].kind === 'break') out.pop();
+    return out;
+  };
+
+  return blocks
+    .map((block) => {
+      if (block.kind === 'paragraph') {
+        return { ...block, children: redactChildren(block.children) };
+      }
+      if (block.kind === 'list') {
+        return {
+          ...block,
+          items: block.items.map(redactChildren).filter((item) => item.length > 0),
+        };
+      }
+      return block;
+    })
+    .filter((block) => block.kind !== 'paragraph' || block.children.length > 0);
 }
 
 // ---------------------------------------------------------------------------

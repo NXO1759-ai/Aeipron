@@ -14,12 +14,14 @@
 //   · HTML policies render through parseLegalHtml (whitelist parser) — safe
 //     React nodes, never dangerouslySetInnerHTML.
 //   · The Terms' four "[LINK]" placeholders render as link-styled buttons
-//     that switch the open dialog to the referenced policy.
+//     that switch the open dialog to the referenced policy; the template's
+//     "[NOTE TO MERCHANT…]" line is redacted from the rendered tree.
 // ---------------------------------------------------------------------------
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   parseLegalHtml,
+  redactBlocks,
   resolveInlineActions,
   structureLegalText,
   type LegalBlock,
@@ -36,9 +38,12 @@ const LEGAL_LINKS: readonly { id: LegalDocumentId; title: string }[] = [
 ];
 
 function parseDocument(doc: LegalDocument): LegalBlock[] {
-  const blocks =
+  let blocks =
     doc.format === 'html' ? parseLegalHtml(doc.body) : structureLegalText(doc.body, doc.headings);
-  return doc.inlineActions?.length ? resolveInlineActions(blocks, doc.inlineActions) : blocks;
+  if (doc.inlineActions?.length) blocks = resolveInlineActions(blocks, doc.inlineActions);
+  // Verbatim source lines that must never render (e.g. "[NOTE TO MERCHANT…]").
+  if (doc.redactions?.length) blocks = redactBlocks(blocks, doc.redactions);
+  return blocks;
 }
 
 // ---------------------------------------------------------------------------
