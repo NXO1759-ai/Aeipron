@@ -6,6 +6,7 @@ import { formatCurrency } from '@/lib/utils';
 import { X } from 'lucide-react';
 import Link from 'next/link';
 import { CartLineItem } from '@/components/CartLineItem';
+import { ShippingProtection } from '@/components/cart/ShippingProtection';
 import { useCheckoutRedirect } from '@/hooks/use-checkout-redirect';
 
 export function CartDrawer() {
@@ -93,6 +94,9 @@ export function CartDrawer() {
             ))
           )}
         </div>
+
+        {/* Shipping protection (Navidium) — only when the bag has lines */}
+        {lines.length > 0 && <ShippingProtection />}
 
         {/* Footer */}
         {lines.length > 0 && (
