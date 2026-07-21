@@ -34,3 +34,102 @@
     transform: translateY(0);
   }
 }
+
+/* ------------------------------------------------------------------------- */
+/* Size selector (components/SizeSelector.tsx) — scoped under .size-selector  */
+/* so nothing here leaks into the global theme. Ivory-on-obsidian ruler with  */
+/* a sliding triangular marker; transform/opacity motion only.                */
+/* ------------------------------------------------------------------------- */
+
+.size-selector {
+  --bg: #0a0a0a;
+  --ivory: #f5f1e8;
+  --line: color-mix(in srgb, var(--ivory) 40%, transparent);
+  --line-soft: color-mix(in srgb, var(--ivory) 25%, transparent);
+  --strike: color-mix(in srgb, var(--ivory) 35%, transparent);
+}
+
+.size-selector__pill {
+  position: relative;
+  border: 1px solid var(--line);
+  color: var(--ivory);
+  transition:
+    background-color 200ms ease,
+    color 200ms ease,
+    border-color 200ms ease;
+}
+
+.size-selector__pill:hover:not(.size-selector__pill--selected):not(.size-selector__pill--sold-out) {
+  border-color: color-mix(in srgb, var(--ivory) 70%, transparent);
+}
+
+.size-selector__pill--selected {
+  background: var(--ivory);
+  border-color: var(--ivory);
+  color: #000;
+}
+
+.size-selector__pill--sold-out {
+  color: var(--line-soft);
+  border-color: var(--line-soft);
+  cursor: not-allowed;
+}
+
+/* Diagonal strike-through across a sold-out pill (pseudo-element, no extra DOM). */
+.size-selector__pill--sold-out::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 130%;
+  height: 1px;
+  background: var(--strike);
+  transform: translate(-50%, -50%) rotate(-16deg);
+  pointer-events: none;
+}
+
+.size-selector__pill:focus-visible {
+  outline: 1px solid var(--ivory);
+  outline-offset: 2px;
+}
+
+/* Ruler: tall ticks every 40px, short ticks every 8px, hairline baseline. */
+.size-selector__track {
+  height: 12px;
+  background-image:
+    repeating-linear-gradient(to right, var(--line) 0 1px, transparent 1px 40px),
+    repeating-linear-gradient(to right, var(--line-soft) 0 1px, transparent 1px 8px),
+    linear-gradient(to right, var(--line-soft), var(--line-soft));
+  background-size:
+    100% 12px,
+    100% 8px,
+    100% 1px;
+  background-position:
+    bottom left,
+    bottom left,
+    bottom left;
+  background-repeat: no-repeat;
+}
+
+/* Border-trick triangle; slides with a compositor-only translateX. */
+.size-selector__marker {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 7px solid var(--ivory);
+  transition: transform 350ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+/* Hidden until the first measurement lands — no slide-in from the edge. */
+.size-selector__marker--idle {
+  opacity: 0;
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .size-selector__marker {
+    transition: none;
+  }
+}
