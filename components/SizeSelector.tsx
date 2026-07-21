@@ -39,6 +39,9 @@ export type SizeSelectorProps = {
   soldOut?: string[];
   /** Initially selected size (ignored when it is sold out). */
   defaultSize?: string;
+  /** Accessible name for the radiogroup — matches the visible PDP header
+   * ("Select Size", "Select Length", …). */
+  label?: string;
   /** Fires only when the selection actually changes. */
   onChange?: (size: string) => void;
 };
@@ -49,7 +52,7 @@ const MARKER_HALF_WIDTH = 5;
 // SSR-safe layout effect: useLayoutEffect warns when run on the server.
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
-export function SizeSelector({ sizes, soldOut = [], defaultSize, onChange }: SizeSelectorProps) {
+export function SizeSelector({ sizes, soldOut = [], defaultSize, label = 'Select size', onChange }: SizeSelectorProps) {
   const soldOutSet = new Set(soldOut);
   const [selected, setSelected] = useState<string | null>(
     defaultSize && !soldOutSet.has(defaultSize) ? defaultSize : null,
@@ -135,7 +138,7 @@ export function SizeSelector({ sizes, soldOut = [], defaultSize, onChange }: Siz
   return (
     <div
       role="radiogroup"
-      aria-label="Select size"
+      aria-label={label}
       className="size-selector w-full select-none bg-transparent"
       onKeyDown={onKeyDown}
     >
