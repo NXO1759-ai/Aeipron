@@ -211,6 +211,11 @@ export const PRODUCT_BY_HANDLE_QUERY = `#graphql
       productSizing: metafield(namespace: "custom", key: "product_sizing") {
         value
       }
+      # Fit-scale position for the Reviews disclosure (json metafield — e.g.
+      # {"fit": 0} on the -2..+2 scale; parsed by lib/fit.ts). Detail only.
+      fitReview: metafield(namespace: "custom", key: "review") {
+        value
+      }
     }
   }
   ${PRODUCT_FRAGMENT}
@@ -347,7 +352,7 @@ const CART_FRAGMENT = `#graphql
  * Operation 5 — read a cart by id.
  *
  * The cart id (incl. the `?key=` secret) is passed as the `$id` variable by the
- * server action, read from the HTTP-only `aeipron-cart-id` cookie. The id is
+ * server action, read from the HTTP-only `apeiron-cart-id` cookie. The id is
  * opaque — never parse, split, or log it. `cart` may be null if the cart expired.
  *
  * Named operation `CartGet` for Shopify query tracking.

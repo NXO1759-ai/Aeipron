@@ -76,19 +76,19 @@ beforeEach(() => {
 
 describe('CART_COOKIE constant', () => {
   it('uses the documented cookie name', () => {
-    expect(CART_COOKIE).toBe('aeipron-cart-id');
+    expect(CART_COOKIE).toBe('apeiron-cart-id');
   });
 });
 
 describe('getCartId', () => {
   it('returns the cookie value verbatim (opaque — never parsed)', async () => {
-    jar['aeipron-cart-id'] = { value: OPAQUE_CART_ID };
+    jar['apeiron-cart-id'] = { value: OPAQUE_CART_ID };
     const id = await getCartId();
     expect(id).toBe(OPAQUE_CART_ID);
   });
 
   it('preserves the ?key= secret intact (no splitting/decoding)', async () => {
-    jar['aeipron-cart-id'] = { value: OPAQUE_CART_ID };
+    jar['apeiron-cart-id'] = { value: OPAQUE_CART_ID };
     const id = await getCartId();
     expect(id).toContain('?key=');
     expect(id).toContain('2891fdade96d3f136d2e670174626694');
@@ -102,7 +102,7 @@ describe('getCartId', () => {
   });
 
   it('returns null for an empty cookie value', async () => {
-    jar['aeipron-cart-id'] = { value: '' };
+    jar['apeiron-cart-id'] = { value: '' };
     const id = await getCartId();
     // An empty string is treated as "no cart" (cookie().get returns {value:''});
     // the helper passes it through — the caller (getCart) treats '' as no id.
@@ -115,7 +115,7 @@ describe('setCartId', () => {
     await setCartId(OPAQUE_CART_ID);
     expect(setCalls).toHaveLength(1);
     expect(setCalls[0].value).toBe(OPAQUE_CART_ID);
-    expect(jar['aeipron-cart-id'].value).toBe(OPAQUE_CART_ID);
+    expect(jar['apeiron-cart-id'].value).toBe(OPAQUE_CART_ID);
   });
 
   it('sets httpOnly: true (browser JS must never read the cart id)', async () => {
@@ -149,9 +149,9 @@ describe('setCartId', () => {
 
 describe('clearCartId', () => {
   it('deletes the cart cookie by name', async () => {
-    jar['aeipron-cart-id'] = { value: OPAQUE_CART_ID };
+    jar['apeiron-cart-id'] = { value: OPAQUE_CART_ID };
     await clearCartId();
-    expect(deleteCalls).toEqual(['aeipron-cart-id']);
-    expect(jar['aeipron-cart-id']).toBeUndefined();
+    expect(deleteCalls).toEqual(['apeiron-cart-id']);
+    expect(jar['apeiron-cart-id']).toBeUndefined();
   });
 });

@@ -41,7 +41,7 @@ vi.mock('@/lib/cart-cookie', () => ({
   getCartId: vi.fn(),
   setCartId: vi.fn(),
   clearCartId: vi.fn(),
-  CART_COOKIE: 'aeipron-cart-id',
+  CART_COOKIE: 'apeiron-cart-id',
 }));
 
 // The adapter (mapCart) is a real pure function — let it run on fixture-shaped

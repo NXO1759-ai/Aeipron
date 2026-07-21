@@ -4,13 +4,12 @@
 // ContactForm — the /contact page's client island.
 //
 // A react-hook-form + zod form (name, email, optional phone, message). On
-// submit it calls the `submitContactMessage` server action, which writes a
-// `contact_message` metaobject to Shopify via the Admin API (the storefront
+// submit it calls the `submitContactMessage` server action, which emails the
+// message to the store inbox (hello@wearapeiron.com) and records a
+// `contact_message` metaobject in Shopify via the Admin API (the storefront
 // `/contact` POST is blocked by Cloudflare + Shopify captcha for headless
-// submissions — see app/contact/actions.ts). The message therefore lands in
-// Shopify admin (and is emailed if the store has a Shopify Flow wired to the
-// metaobject), while the form stays in our headless UI with an in-page
-// success state.
+// submissions — see app/contact/actions.ts), while the form stays in our
+// headless UI with an in-page success state.
 //
 // Reuses the dark-theme form primitives from components/form/Field.tsx (Field,
 // Input) so the contact form looks identical to the checkout form. TRUST
@@ -22,7 +21,7 @@
 // page, so /contact stays prerendered + indexable (no `force-dynamic`).
 // ---------------------------------------------------------------------------
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { contactFormSchema, type ContactForm } from '@/lib/contact-schema';
@@ -38,11 +37,21 @@ export function ContactForm() {
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<ContactForm>({
     resolver: zodResolver(contactFormSchema),
-    defaultValues: { name: '', email: '', phone: '', message: '' },
+    defaultValues: { name: '', email: '', phone: '', message: '', website: '' },
   });
+
+  // Stamp the form-mount time into the hidden `startedAt` field — the server
+  // action's time-trap drops submissions that arrive implausibly fast. Set in
+  // an effect (never during render): /contact is prerendered, so a render-time
+  // Date.now() would bake the BUILD time into the static HTML and the trap
+  // would never trip.
+  useEffect(() => {
+    setValue('startedAt', Date.now());
+  }, [setValue]);
 
   const onSubmit = async (data: ContactForm) => {
     setSubmitting(true);
@@ -51,7 +60,7 @@ export function ContactForm() {
       const result = await submitContactMessage(data);
       if (result.ok) {
         setSubmitted(true);
-        reset({ name: '', email: '', phone: '', message: '' });
+        reset({ name: '', email: '', phone: '', message: '', website: '' });
       } else {
         setActionError(result.error);
       }
@@ -120,6 +129,26 @@ export function ContactForm() {
           {actionError}
         </p>
       ) : null}
+
+      {/* Honeypot — bot trap. Rendered far off-screen (NOT display:none, which
+          smarter bots skip), removed from the tab order and the accessibility
+          tree, so a human never sees, tabs into, or fills it. A non-empty
+          value tells the server action to silently drop the submission.
+          `startedAt` is the time-trap companion (stamped on mount above). */}
+      <div
+        aria-hidden="true"
+        style={{ position: 'absolute', left: '-9999px', top: '-9999px', width: 0, height: 0, overflow: 'hidden' }}
+      >
+        <label htmlFor="contact-website">Website</label>
+        <input
+          id="contact-website"
+          type="text"
+          tabIndex={-1}
+          autoComplete="off"
+          {...register('website')}
+        />
+        <input type="hidden" {...register('startedAt', { valueAsNumber: true })} />
+      </div>
 
       <button
         type="submit"

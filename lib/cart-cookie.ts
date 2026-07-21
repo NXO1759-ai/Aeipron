@@ -24,7 +24,7 @@ import 'server-only';
 import { cookies } from 'next/headers';
 
 /** The HTTP-only cookie name holding the opaque Shopify cart id. */
-export const CART_COOKIE = 'aeipron-cart-id';
+export const CART_COOKIE = 'apeiron-cart-id';
 
 /** Cookie lifetime: 14 days, in seconds. */
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 14;

@@ -13,12 +13,11 @@ import { ContactForm } from './ContactForm';
 //
 // The ContactForm is a client island inside this static page: the page stays
 // prerendered + indexable, while the form submits via a server action that
-// writes a `contact_message` metaobject to Shopify via the Admin API. The
-// storefront `/contact` POST endpoint is NOT used — it is protected by
-// Cloudflare bot management + Shopify storefront-form captcha, both of which
-// block headless submissions (see app/contact/actions.ts for the full
-// rationale). Submissions land in Shopify admin (and are emailed if the store
-// has a Shopify Flow wired to the metaobject).
+// emails the message to the store inbox (hello@wearapeiron.com) and records a
+// `contact_message` metaobject in Shopify via the Admin API. The storefront
+// `/contact` POST endpoint is NOT used — it is protected by Cloudflare bot
+// management + Shopify storefront-form captcha, both of which block headless
+// submissions (see app/contact/actions.ts for the full rationale).
 //
 // LAYOUT: top padding is owned by LayoutWrapper's <main className="pt-24">. We
 // add extra top breathing room (`pt-10 md:pt-16`) so the eyebrow is not glued to

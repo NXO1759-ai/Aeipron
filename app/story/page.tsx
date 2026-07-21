@@ -73,10 +73,11 @@ export default function StoryPage() {
             transition={{ duration: 1.5, ease: [0.25, 1, 0.5, 1] }}
             className="relative aspect-[3/4] md:aspect-[4/5] bg-neutral-900 overflow-hidden"
           >
-            <Image 
-              src="https://picsum.photos/seed/storyorigin/1200/1600" 
-              alt="16mm cinematic macro-shot of a garment" 
-              fill 
+            <Image
+              src="https://picsum.photos/seed/storyorigin/1200/1600"
+              alt="16mm cinematic macro-shot of a garment"
+              fill
+              sizes="(min-width: 768px) 50vw, 100vw"
               className="object-cover contrast-125 brightness-75"
             />
           </motion.div>

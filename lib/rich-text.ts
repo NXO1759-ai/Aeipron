@@ -56,16 +56,65 @@ export type RichTextBlock =
       children: RichTextBlock[];
     };
 
+/**
+ * Protocols allowed in rich-text LINK urls. Anything else — `javascript:`,
+ * `data:`, `vbscript:`, `file:` — is dropped. The metafield is merchant-
+ * controlled, but a compromised Shopify admin session or a rogue app must not
+ * be able to inject script URLs that execute in shoppers' browsers. React does
+ * NOT sanitize `javascript:` hrefs — it renders them verbatim.
+ */
+const SAFE_LINK_PROTOCOLS = new Set(['https:', 'http:', 'mailto:', 'tel:']);
+
+/**
+ * Return the url unchanged when its protocol is safe for a link, else
+ * `undefined`. Relative urls (e.g. `/pages/faq`) resolve against an https base
+ * and are allowed; the ORIGINAL string is returned so rendering is unchanged.
+ */
+function sanitizeLinkUrl(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  const trimmed = url.trim();
+  if (!trimmed) return undefined;
+  try {
+    const parsed = new URL(trimmed, 'https://localhost');
+    return SAFE_LINK_PROTOCOLS.has(parsed.protocol) ? trimmed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Return the url unchanged when it is an https (or protocol-relative / fully
+ * relative) image url, else `undefined`. https-only: no `http:` mixed content,
+ * no `data:` / `javascript:` payloads.
+ */
+function sanitizeImageUrl(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  const trimmed = url.trim();
+  if (!trimmed) return undefined;
+  try {
+    const parsed = new URL(trimmed, 'https://localhost');
+    return parsed.protocol === 'https:' ? trimmed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Map a Shopify inline node (text / link) to a normalized inline block. */
 function toInline(child: RichTextNode): RichTextBlock {
   if (child.type === 'link') {
+    const href = sanitizeLinkUrl(child.url);
+    const target = child.target ?? '_blank';
     return {
       kind: 'element',
       tag: 'a',
       props: {
-        href: child.url,
-        target: child.target ?? '_blank',
-        rel: child.rel ?? 'noopener noreferrer',
+        // undefined when the url is unsafe — React then renders an inert
+        // anchor with no navigation and nothing to exploit.
+        href,
+        target: href ? target : undefined,
+        // `_blank` ALWAYS forces noopener noreferrer (prevents reverse
+        // tabnabbing), even when the metafield carries a custom rel.
+        rel: target === '_blank' ? 'noopener noreferrer' : child.rel,
       },
       children: (child.children ?? []).map(toInline),
     };
@@ -129,8 +178,13 @@ function toBlock(node: RichTextNode): RichTextBlock | null {
         })),
       };
 
-    case 'image':
-      return { kind: 'element', tag: 'img', props: { src: node.url }, children: [] };
+    case 'image': {
+      // https-only urls; an unsafe/absent url drops the image entirely (an
+      // <img> with no src would be a broken render anyway).
+      const src = sanitizeImageUrl(node.url);
+      if (!src) return null;
+      return { kind: 'element', tag: 'img', props: { src }, children: [] };
+    }
 
     case 'link':
     case 'text':

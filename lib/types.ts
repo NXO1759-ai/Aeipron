@@ -89,6 +89,11 @@ export interface Product {
   detailsFabrication?: string;
   productCare?: string;
   productSizing?: string;
+  // Fit position on the Reviews-disclosure scale (-2 Much Smaller … 0 True To
+  // Size … +2 Much Larger), parsed from the `custom.review` json metafield by
+  // lib/fit.ts. Undefined only for nodes that don't select the metafield
+  // (collection cards) — the PDP always resolves it (default 0).
+  fit?: number;
 }
 
 export interface MerchItem {

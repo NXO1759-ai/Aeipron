@@ -35,6 +35,10 @@ export default async function ShopPage() {
               The full collection. Every piece, all in one place.
             </p>
           </div>
+          {/* Filter / Sort controls — hidden until they are wired to real
+              behavior. They were plain <button>s with no handler (dead UI that
+              shoppers could click with zero effect). Re-enable with real
+              filtering/sorting logic:
           <div className="mt-8 md:mt-0 flex gap-4 text-sm font-bold uppercase tracking-widest">
             <button type="button" className="hover:text-apeiron-ivory text-ui-concrete transition-colors">
               Filter
@@ -44,6 +48,7 @@ export default async function ShopPage() {
               Sort
             </button>
           </div>
+          */}
         </div>
 
         {/* Product Grid */}

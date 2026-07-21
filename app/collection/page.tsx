@@ -17,11 +17,14 @@ export default async function CollectionPage() {
           <div>
             <h1 className="font-inter text-4xl md:text-5xl font-medium uppercase tracking-tighter mb-4">Collection</h1>
           </div>
+          {/* Filter / Sort controls — hidden until wired to real behavior
+              (they were dead buttons with no handler). Re-enable with logic:
           <div className="mt-8 md:mt-0 flex gap-4 text-sm font-bold uppercase tracking-widest">
             <button type="button" className="hover:text-apeiron-ivory text-ui-concrete transition-colors">Filter</button>
             <span className="text-ui-concrete/50">/</span>
             <button type="button" className="hover:text-apeiron-ivory text-ui-concrete transition-colors">Sort</button>
           </div>
+          */}
         </div>
 
         {/* Collections Grid */}
@@ -37,6 +40,7 @@ export default async function CollectionPage() {
                       src={collection.image}
                       alt={collection.name}
                       fill
+                      sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
                       className="object-cover transition-transform duration-[800ms] ease-[cubic-bezier(0.25,1,0.5,1)] group-hover:scale-105"
                     />
                   ) : (

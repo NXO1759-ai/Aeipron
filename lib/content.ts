@@ -93,43 +93,13 @@ export function getHelpContent(): HelpFaqSection[] {
         },
       ],
     },
-    {
-      heading: 'Product Care',
-      items: [
-        {
-          question: 'How should I care for my Apeiron pieces?',
-          answer:
-            'Machine wash cold on a gentle cycle with like colors. Tumble dry low or hang to dry. Do not bleach. Iron on low if needed.',
-        },
-        {
-          question: 'Will the print fade over time?',
-          answer:
-            'Our high-density 3D ink is engineered for longevity. Wash inside-out to preserve the graphic for as long as possible.',
-        },
-      ],
-    },
-    {
-      heading: 'Sizing',
-      items: [
-        {
-          question: 'How do I find my size?',
-          answer:
-            'Each product page lists its measurements. If you are between sizes, we recommend sizing up for a relaxed fit.',
-        },
-        {
-          question: 'Can I exchange for a different size?',
-          answer:
-            'Yes — unworn items can be exchanged within 14 days, subject to availability. Email us to arrange it.',
-        },
-      ],
-    },
   ];
 }
 
 /** Static contact information. Replace the body with a Shopify fetch in the dynamic phase. */
 export function getContactContent(): ContactInfo {
   return {
-    email: 'hello@apeiron.com',
+    email: 'hello@wearapeiron.com',
     address: 'New York, USA',
     hours: 'Studio hours: Mon–Fri, 9am–6pm ET',
     socials: [
