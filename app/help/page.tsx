@@ -1,17 +1,18 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { getHelpContent } from '@/lib/content';
+import { getHelpSections } from '@/lib/help-content';
 import { Disclosure } from '@/components/Disclosure';
 
 // ---------------------------------------------------------------------------
 // /help — the Help Center page.
 //
-// A static Server Component (prerendered at build time — no fetch, no
-// `force-dynamic`) that renders FAQ accordion sections from lib/content. The
-// content is static for now; a later phase swaps getHelpContent() for a Shopify
-// Page/metaobject fetch (see lib/content.ts for the real swap cost). These
-// pages ARE canonical, linkable destinations — unlike /cart, they SHOULD be
-// indexed, so there is no robots:noindex here.
+// Content is merchant-editable in Shopify (Settings → Custom data →
+// Metaobjects → Help question; see lib/help-content.ts for the field contract)
+// and falls back to the static defaults in lib/content when no entries exist,
+// so the page always renders. Fetched via ISR (`revalidate = 300`): edits in
+// Shopify appear within five minutes without a redeploy, and Shopify is not
+// hit on every page view. These pages ARE canonical, linkable destinations —
+// unlike /cart, they SHOULD be indexed, so there is no robots:noindex here.
 //
 // LAYOUT: top padding is owned by LayoutWrapper's <main className="pt-24">. We
 // add extra top breathing room (`pt-10 md:pt-16`) so the eyebrow is not glued to
@@ -24,6 +25,8 @@ export const metadata: Metadata = {
     'Answers to common questions about orders, shipping, and returns at Apeiron.',
 };
 
+export const revalidate = 300;
+
 // Slugify a section heading into a stable, DOM-id-safe value (no spaces / `&`).
 // Used for the section id, aria-labelledby, and the React key — so the accessible
 // name always resolves and keys stay unique even if two headings ever collide.
@@ -34,8 +37,8 @@ function slugify(heading: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-export default function HelpPage() {
-  const sections = getHelpContent();
+export default async function HelpPage() {
+  const sections = await getHelpSections();
 
   return (
     <div className="min-h-screen bg-apeiron-black text-apeiron-ivory">
@@ -72,7 +75,17 @@ export default function HelpPage() {
                 <div className="space-y-1">
                   {section.items.map((item, index) => (
                     <Disclosure key={`${slug}-${index}`} summary={item.question}>
-                      {item.answer}
+                      {/* Metaobject answers are multi-line plain text — each
+                          non-empty line renders as its own paragraph. */}
+                      {item.answer
+                        .split('\n')
+                        .map((line) => line.trim())
+                        .filter(Boolean)
+                        .map((line, lineIndex) => (
+                          <p key={lineIndex} className="[&:not(:first-child)]:mt-2">
+                            {line}
+                          </p>
+                        ))}
                     </Disclosure>
                   ))}
                 </div>

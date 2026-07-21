@@ -1,28 +1,21 @@
 // ---------------------------------------------------------------------------
-// lib/content — static Help/FAQ + Contact Us content.
+// lib/content — static Help/FAQ fallback + Contact Us content.
 //
-// STATIC NOW, DYNAMIC LATER. This module is the single place the two standalone
-// content pages (/help, /contact) read their copy from, and the single place the
-// footer reads its studio-origin line from. Today it returns hardcoded data.
+// HELP CENTER: the /help page reads merchant-editable `help_question`
+// metaobjects from Shopify via lib/help-content.ts — `getHelpContent()` here
+// is the STATIC FALLBACK rendered when no entries exist or Shopify is
+// unreachable, so the Help Center can never go blank. Keep this fallback
+// roughly in sync with the metaobject entries.
 //
-// SWAP COST (be honest about it): when Shopify is set up to deliver page content
-// (via a Shopify Page `page(handle:)` — which needs the `unauthenticated_read_content`
-// scope, currently off per docs/SHOPIFY_API.md — or a metaobject), swap the BODIES
-// of `getHelpContent` / `getContactContent` for those fetches. That swap is NOT a
-// pure one-function change: making these async requires adding `await` at the call
-// sites in both pages AND `export const dynamic = 'force-dynamic'` on both pages,
-// because a network fetch opts the route out of static prerender. If Shopify
-// returns HTML bodies (it does for `page.body`), `answer: string` must also widen
-// (e.g. to a `plain | rich` discriminated union) and the /help renderer must switch
-// from text to a sanitized-HTML renderer (dangerouslySetInnerHTML + a sanitizer).
-// This module centralizes the DATA seam; the page + type changes that follow are
-// localized and documented, not avoided. This mirrors the mock→Shopify pattern
-// already used in lib/catalog.ts (organizers stay mock-backed "until Phase 4").
+// CONTACT: `getContactContent` is still the single source for the contact
+// details (the footer's shipping-from line). If Shopify ever delivers that
+// copy (a Page via `page(handle:)` needs the `unauthenticated_read_content`
+// scope, currently off per docs/SHOPIFY_API.md), swap the body for that
+// fetch — the call sites (Footer) must then become async-capable.
 //
-// No server-only imports here today: these are plain, synchronous data-accessors.
-// The pages that consume them are static Server Components (prerendered at build
-// time). When the swap adds a network fetch, these become async and the pages
-// become dynamic — at which point server-only imports become permissible here.
+// No server-only imports here: these are plain, synchronous data-accessors
+// and Footer (bundled into the client tree) imports getContactContent. The
+// Shopify fetch lives in lib/help-content.ts (server-only) for that reason.
 // ---------------------------------------------------------------------------
 
 /** A single FAQ accordion section: a heading plus its Q/A pairs. */
@@ -40,7 +33,7 @@ export type ContactInfo = {
   socials?: { label: string; href: string }[];
 };
 
-/** Static FAQ content. Replace the body with a Shopify fetch in the dynamic phase. */
+/** Static FAQ fallback — rendered when no help_question metaobjects exist. */
 export function getHelpContent(): HelpFaqSection[] {
   return [
     {
