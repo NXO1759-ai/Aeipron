@@ -160,7 +160,7 @@ function mapOptions(
     for (const opt of variant.selectedOptions) {
       let valueMap = groups.get(opt.name);
       if (!valueMap) {
-        valueMap = new Map();
+        valueMap = new Map<string, ProductOptionValue>();
         groups.set(opt.name, valueMap);
       }
       const variantPrice = Number(variant.price.amount);
@@ -276,6 +276,7 @@ export function mapCartLine(node: ShopifyCartLine): CartLine {
     lineId: node.id,
     merchandiseId: variant.id,
     name: variant.product.title,
+    productHandle: variant.product.handle,
     price: Number(node.cost.amountPerQuantity.amount),
     variantLabel: lineLabel(variant),
     quantity: node.quantity,
