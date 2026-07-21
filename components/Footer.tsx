@@ -8,10 +8,10 @@ import { NewsletterForm } from './NewsletterForm';
 //
 // Four columns on desktop:
 //   1. Brand block — Apeiron text lockup (matches Header), Japanese tagline,
-//      body copy, divider, shipping-from address, social icons.
+//      "Beyond the trend." line, divider, shipping-from address, social icons.
 //   2. Shop links — Collection, Our Story (with arrows).
 //   3. Support links — Help Center, Contact Us (with arrows).
-//   4. Stay in the Loop — newsletter copy + NewsletterForm email capture.
+//   4. Join the List — newsletter copy + NewsletterForm email capture.
 //
 // Bottom bar: copyright (left), Privacy Policy + Terms of Service (right).
 //
@@ -104,8 +104,7 @@ export function Footer() {
             </div>
 
             <p className="text-ui-concrete text-xs leading-relaxed max-w-xs">
-              Tools and apparel designed to elevate your everyday. Built with
-              purpose, crafted to last.
+              Beyond the trend.
             </p>
 
             <hr className="border-ui-concrete/20 w-full my-0" />
@@ -158,13 +157,13 @@ export function Footer() {
             </div>
           </nav>
 
-          {/* Stay in the Loop */}
+          {/* Join the List */}
           <div className="flex flex-col gap-4">
             <h2 className="text-ui-concrete uppercase tracking-widest text-xs font-bold">
-              Stay in the Loop
+              Join the List
             </h2>
             <p className="text-ui-concrete text-xs leading-relaxed">
-              Be the first to know about new drops, exclusive offers, and more.
+              Early access to new drops and studio news. No noise — unsubscribe anytime.
             </p>
             <NewsletterForm />
           </div>
