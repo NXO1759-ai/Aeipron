@@ -21,6 +21,7 @@
 
 import 'server-only';
 
+import { parseFitScale } from '@/lib/fit';
 import type {
   Product,
   ProductOption,
@@ -76,6 +77,11 @@ export function mapProduct(node: ShopifyProductNode): Product {
     detailsFabrication: node.detailsFabrication?.value ?? undefined,
     productCare: node.productCare?.value ?? undefined,
     productSizing: node.productSizing?.value ?? undefined,
+    // Unlike the rich-text metafields above, the fit value IS interpreted here:
+    // the json metafield resolves to a -2..+2 number once (parse is tolerant —
+    // anything unparseable becomes 0, True To Size), so the client only ever
+    // sees a number.
+    fit: parseFitScale(node.fitReview?.value),
   };
 }
 

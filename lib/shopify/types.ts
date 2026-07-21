@@ -96,6 +96,10 @@ export interface ShopifyProductNode {
   detailsFabrication?: { value: string | null } | null;
   productCare?: { value: string | null } | null;
   productSizing?: { value: string | null } | null;
+  // `custom.review` json metafield (aliased `fitReview`) — holds the product's
+  // fit-scale position for the Reviews disclosure. `value` is a JSON string
+  // parsed by lib/fit.ts. Detail query only.
+  fitReview?: { value: string | null } | null;
 }
 
 /** A Shopify Collection (category) node. */
@@ -225,7 +229,7 @@ export interface ShopifyCartDeliveryOption {
   title: string | null;
   description: string | null;
   estimatedCost: ShopifyCartMoney; // MoneyV2 — amount (string) + currencyCode
-  deliveryMethodType: string; // DeliveryMethodType enum: SHIPPING | PICKUP | LOCAL
+  deliveryMethodType: string; // SHIPPING | PICKUP | LOCAL
 }
 
 /** A delivery group: the address + the available/selected shipping options. */
