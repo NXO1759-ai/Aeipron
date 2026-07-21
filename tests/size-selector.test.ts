@@ -4,6 +4,7 @@ import {
   firstEnabledIndex,
   lastEnabledIndex,
   nextEnabledIndex,
+  splitOptionValues,
 } from '@/lib/size-selector';
 
 // ---------------------------------------------------------------------------
@@ -11,9 +12,35 @@ import {
 // contract under test: arrow-key navigation always lands on an ENABLED size,
 // skipping sold-out runs and wrapping around both ends; when everything is
 // sold out, navigation is a safe no-op instead of throwing or focusing void.
+// Also covers splitOptionValues, the PDP option-group → selector mapping.
 // ---------------------------------------------------------------------------
 
 const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
+
+describe('splitOptionValues — PDP option group → SizeSelector props', () => {
+  it('maps every value to sizes, in display order', () => {
+    const { sizes } = splitOptionValues([
+      { value: 'S', inStock: true },
+      { value: 'M', inStock: false },
+      { value: 'L', inStock: true },
+    ]);
+    expect(sizes).toEqual(['S', 'M', 'L']);
+  });
+
+  it('collects out-of-stock values into soldOut', () => {
+    const { soldOut } = splitOptionValues([
+      { value: 'S', inStock: true },
+      { value: 'XL', inStock: false },
+      { value: 'XXL', inStock: false },
+    ]);
+    expect(soldOut).toEqual(['XL', 'XXL']);
+  });
+
+  it('handles empty and all-in-stock groups', () => {
+    expect(splitOptionValues([])).toEqual({ sizes: [], soldOut: [] });
+    expect(splitOptionValues([{ value: 'OS', inStock: true }])).toEqual({ sizes: ['OS'], soldOut: [] });
+  });
+});
 
 describe('enabledIndexes', () => {
   it('returns the indexes of enabled sizes in ascending order', () => {
