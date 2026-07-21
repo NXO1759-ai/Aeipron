@@ -77,12 +77,12 @@ export function getHelpContent(): HelpFaqSection[] {
         {
           question: 'What is your return policy?',
           answer:
-            'You have 14 days from delivery to return unworn, unwashed pieces with tags attached for a full refund to your original payment method.\nThat\'s the standard window, and we keep it simple: no restocking fees, no interrogation.\nOne note: because SKUs are limited runs, returned pieces go through inspection before they re-enter stock.',
+            'You have 30 days from delivery to return unworn or unused pieces, with tags, in their original packaging, for a refund to your original payment method.\nThat\'s the standard window, and we keep it simple: no restocking fees, no interrogation.\nOne note: because SKUs are limited runs, returned pieces go through inspection before they re-enter stock.',
         },
         {
           question: 'How do I start a return?',
           answer:
-            'Email us hello@wearapeiron.com with your order number and what you\'re sending back.\nWe\'ll reply within two business days with a prepaid domestic return label [US only] and instructions.\nRefunds are processed within [5–10 business days] of the return arriving.',
+            'Email us hello@wearapeiron.com with your order number and what you\'re sending back.\nOnce your return is accepted, we\'ll send you a return shipping label and instructions on how and where to send your package.\nRefunds are processed within 10 business days of the return arriving.',
         },
       ],
     },
