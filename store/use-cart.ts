@@ -66,6 +66,9 @@ export interface AddItemInput {
   variantLabel: string;
   image: string;
   currencyCode?: string;
+  // The product's handle, when the caller knows it (the reconciled server line
+  // always carries it). Feeds lib/protection.ts detection for optimistic lines.
+  productHandle?: string;
 }
 
 type Status = 'idle' | 'pending' | 'error';
@@ -152,6 +155,7 @@ export const useCart = create<CartState>()((set, get) => ({
       lineId: provLineId,
       merchandiseId: item.merchandiseId,
       name: item.name,
+      productHandle: item.productHandle ?? '',
       price: item.price,
       variantLabel: item.variantLabel,
       image: item.image,
