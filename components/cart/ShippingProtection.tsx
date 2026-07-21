@@ -2,27 +2,31 @@
 
 // ---------------------------------------------------------------------------
 // Shipping protection toggle (Navidium) — rendered in the cart drawer between
-// the line items and the footer. Quotes come from the server action
-// (app/cart/protection.ts); the returned variant belongs to Navidium's own
-// protection product and is TIERED by merchandise subtotal, so:
+// the line items and the footer, and on /cart under the lines. Quotes come
+// from the server action (app/cart/protection.ts); the returned variant
+// belongs to Navidium's own protection product and is TIERED by merchandise
+// subtotal, so:
 //   - the quote is re-requested whenever the merchandise lines change, and
 //   - a quote is only ever USED while its key still matches the live lines
 //     (a stale tier can never be added by racing the cart).
-// When NAVIDIUM_API_URL is unset the action returns null and this renders
-// nothing — the feature is invisible on stores without Navidium.
+//
+// The protection LINE itself never renders as a product — detection lives in
+// lib/protection.ts (product handle first, name fallback), which is also what
+// `enabled` reads, so the switch stays on after Shopify reconciles the line
+// under Navidium's own product title ('Protected Checkout').
+//
+// Presentation mirrors the Navidium widget format: shield mark, "Shipping
+// insurance +$X" label, and the peace-of-mind copy. When NAVIDIUM_API_URL is
+// unset the action returns null and this renders nothing — the feature is
+// invisible on stores without Navidium.
 // ---------------------------------------------------------------------------
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { getShippingProtectionQuote } from '@/app/cart/protection';
+import { merchandiseLinesOf, protectionLineOf } from '@/lib/protection';
 import { formatCurrency } from '@/lib/utils';
-import type { CartLine } from '@/lib/types';
 import { useCart } from '@/store/use-cart';
-
-/** Navidium's line is identifiable by name only — it is their product. */
-function isProtectionLine(line: CartLine): boolean {
-  return line.name.toLowerCase().includes('protection');
-}
 
 interface KeyedQuote {
   /** The merchandise-lines fingerprint this quote was issued for. */
@@ -31,13 +35,32 @@ interface KeyedQuote {
   price: number;
 }
 
-export function ShippingProtection() {
-  const { isOpen, items, currencyCode, addItem, removeItem } = useCart();
+/** Shield-check mark (brand line style), echoing the Navidium widget glyph. */
+function ShieldIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5"
+      aria-hidden="true"
+    >
+      <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1 1 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
+  );
+}
+
+export function ShippingProtection({ active }: { active: boolean }) {
+  const { items, currencyCode, addItem, removeItem } = useCart();
   const [quote, setQuote] = useState<KeyedQuote | null>(null);
   const swappingRef = useRef(false);
 
-  const merchandiseLines = useMemo(() => items.filter((l) => !isProtectionLine(l)), [items]);
-  const protectionLine = items.find(isProtectionLine) ?? null;
+  const merchandiseLines = useMemo(() => merchandiseLinesOf(items), [items]);
+  const protectionLine = protectionLineOf(items);
 
   // Fingerprint of the quote-relevant line state. A quote is valid only while
   // this matches — any add/remove/quantity change invalidates it.
@@ -46,10 +69,11 @@ export function ShippingProtection() {
     [merchandiseLines],
   );
 
-  // Fetch a fresh quote when the drawer is open and the lines change. The
-  // state write happens asynchronously, keyed to the lines it was issued for.
+  // Fetch a fresh quote while visible (drawer open / cart page mounted) and
+  // the lines change. The state write happens asynchronously, keyed to the
+  // lines it was issued for.
   useEffect(() => {
-    if (!isOpen || merchandiseLines.length === 0) return;
+    if (!active || merchandiseLines.length === 0) return;
     let cancelled = false;
     getShippingProtectionQuote({
       lines: merchandiseLines.map((l) => ({
@@ -63,7 +87,7 @@ export function ShippingProtection() {
     return () => {
       cancelled = true;
     };
-  }, [isOpen, quoteKey, merchandiseLines]);
+  }, [active, quoteKey, merchandiseLines]);
 
   // Only a quote issued for the CURRENT lines may drive the UI.
   const liveQuote = quote && quote.key === quoteKey ? quote : null;
@@ -111,13 +135,13 @@ export function ShippingProtection() {
   return (
     <div className="border-t border-ui-concrete/20 px-6 py-4">
       <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="text-sm font-bold uppercase tracking-widest text-primary-cream">
-            Shipping protection
-          </p>
-          <p className="mt-1 text-xs text-ui-concrete">
-            Covers loss, theft &amp; damage —{' '}
-            <span className="font-mono text-primary-cream">{formatCurrency(liveQuote.price, currencyCode)}</span>
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm bg-primary-cream text-primary-obsidian">
+            <ShieldIcon />
+          </span>
+          <p className="text-sm font-bold text-primary-cream">
+            Shipping insurance{' '}
+            <span className="font-mono">+{formatCurrency(liveQuote.price, currencyCode)}</span>
           </p>
         </div>
         <button
@@ -138,6 +162,10 @@ export function ShippingProtection() {
           />
         </button>
       </div>
+      <p className="mt-2 text-xs leading-relaxed text-ui-concrete">
+        Get peace of mind with Shipping Protection in the event your delivery is Lost, Stolen or
+        Damaged during transit.
+      </p>
     </div>
   );
 }
