@@ -326,9 +326,17 @@ export interface ShopifyMetaobjectNode {
   fields: { key: string; value: string | null }[];
 }
 
-/** Response shape for the HelpQuestions query. */
-export interface ShopifyMetaobjectsResponse {
-  metaobjects: {
-    edges: { node: ShopifyMetaobjectNode }[];
-  };
+/** A metaobjects connection slice (edges of field key/value nodes). */
+export interface ShopifyMetaobjectConnection {
+  edges: { node: ShopifyMetaobjectNode }[];
+}
+
+/**
+ * Response shape for the HelpQuestions query — two aliased connections, one
+ * per accepted definition handle (`faq_entry` preferred, `help_question` as
+ * the documented handle for a recreated definition).
+ */
+export interface ShopifyHelpQuestionsResponse {
+  faqEntries: ShopifyMetaobjectConnection;
+  helpQuestions: ShopifyMetaobjectConnection;
 }

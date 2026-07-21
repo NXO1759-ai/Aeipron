@@ -682,22 +682,36 @@ export const CART_SELECTED_DELIVERY_OPTIONS_UPDATE_MUTATION = `#graphql
  * Operation 15 — read the Help Center Q&A entries.
  *
  * The merchant edits Help Center content in Shopify admin (Settings → Custom
- * data → Metaobjects → Help question) — one `help_question` metaobject per
- * accordion item, with fields:
- *   section  (single_line_text) — the accordion group, e.g. "Orders"
+ * data → Metaobjects) — one metaobject per accordion item, with fields:
  *   question (single_line_text) — the disclosure summary
  *   answer   (multi_line_text)  — the disclosure body (plain text, one
  *                                 paragraph per line)
- *   position (number_integer)   — manual sort order (ascending)
- * The definition must have Storefront API access enabled (its default when
- * created via "Add definition"). When no entries exist (feature not set up
- * yet), the caller falls back to the static defaults — the page never 500s.
+ *   category (single_line_text) — the accordion group, e.g. "Orders"
+ *   position (number_integer)   — OPTIONAL manual sort order (ascending);
+ *                                 when absent, Shopify's return order is kept
+ *
+ * Two type handles are read in one round trip because the DEFINITION'S TYPE
+ * HANDLE is fixed at creation time (renaming the display name does NOT change
+ * it): this store's definition was created as `faq_entry` and later renamed
+ * "Help Question". `faq_entry` (the live definition) is preferred;
+ * `help_question` is the documented handle if the definition is ever recreated
+ * from scratch. The definition needs Storefront API access enabled.
  *
  * Named operation `HelpQuestions` for Shopify query tracking.
  */
 export const HELP_QUESTIONS_QUERY = `#graphql
   query HelpQuestions {
-    metaobjects(type: "help_question", first: 100) {
+    faqEntries: metaobjects(type: "faq_entry", first: 100) {
+      edges {
+        node {
+          fields {
+            key
+            value
+          }
+        }
+      }
+    }
+    helpQuestions: metaobjects(type: "help_question", first: 100) {
       edges {
         node {
           fields {
