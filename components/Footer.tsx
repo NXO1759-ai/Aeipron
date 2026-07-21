@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Instagram } from 'lucide-react';
 import { getContactContent } from '@/lib/content';
 import { NewsletterForm } from './NewsletterForm';
+import { FooterLegal } from './FooterLegal';
 
 // ---------------------------------------------------------------------------
 // Footer — redesigned site-wide footer (reference image).
@@ -13,7 +14,9 @@ import { NewsletterForm } from './NewsletterForm';
 //   3. Support links — Help Center, Contact Us (with arrows).
 //   4. Join the List — newsletter copy + NewsletterForm email capture.
 //
-// Bottom bar: copyright (left), Privacy Policy + Terms of Service (right).
+// Bottom bar: copyright (left), legal links (right) — Privacy Policy, Refund
+// Policy and Terms of Service open as pop-up dialogs (FooterLegal); the store
+// is headless, so there are no Shopify policy pages to link to.
 //
 // Boundaries: this file has no 'use client' directive, but it is imported by
 // the 'use client' LayoutWrapper, so Next bundles it into the client tree. It
@@ -178,26 +181,7 @@ export function Footer() {
             &copy; {year} Apeiron. All rights reserved.
           </p>
 
-          {/* Hidden per client direction — re-enable when explicitly requested.
-              Both are placeholder `href="#"` (no /privacy or /terms route exists
-              yet); uncomment the block below to surface them again. The wrapping
-              div is commented as a unit so the bottom bar's layout intent stays
-              on disk alongside the markup.
-          <div className="flex items-center gap-6">
-            <Link
-              href="#"
-              className="text-ui-concrete uppercase tracking-widest text-[10px] font-bold hover:text-primary-cream transition-colors"
-            >
-              Privacy Policy
-            </Link>
-            <Link
-              href="#"
-              className="text-ui-concrete uppercase tracking-widest text-[10px] font-bold hover:text-primary-cream transition-colors"
-            >
-              Terms of Service
-            </Link>
-          </div>
-          */}
+          <FooterLegal />
         </div>
       </div>
     </footer>
