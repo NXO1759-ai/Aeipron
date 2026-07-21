@@ -116,7 +116,7 @@ export interface Organizer {
 export interface CollectionSummary {
   id: string; // Shopify collection handle — used as the /collection/[handle] route param
   name: string; // collection title
-  description: string;
+  description: string; // collection description
   image: string; // collection image, falling back to a product's featuredImage
 }
 
@@ -151,6 +151,11 @@ export interface CartLine {
   lineId: string; // Shopify cart-line GID — unique key for updates/removal/React
   merchandiseId: string; // Shopify ProductVariant GID — used to create a line
   name: string; // display name (product title)
+  // The product's handle (URL slug) from merchandise.product.handle. '' only on
+  // an optimistic line whose caller didn't supply one (pre-reconcile). Used by
+  // lib/protection.ts to recognize Navidium's protection product no matter what
+  // title Shopify reconciles onto the line.
+  productHandle: string;
   price: number; // display-only, from Shopify cost.amountPerQuantity
   // The variant descriptor shown under the line: ALL selectedOption values
   // joined in Shopify order (e.g. "Black / large"), skipping a lone 'Title'

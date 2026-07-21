@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { CartLineItem } from '@/components/CartLineItem';
 import { ShippingProtection } from '@/components/cart/ShippingProtection';
 import { useCheckoutRedirect } from '@/hooks/use-checkout-redirect';
+import { merchandiseLinesOf, protectionQuantityOf } from '@/lib/protection';
 
 export function CartDrawer() {
   const {
@@ -27,8 +28,11 @@ export function CartDrawer() {
     useCheckoutRedirect();
 
   // Before hydration, render the empty/zero baseline so SSR and client agree.
-  const count = hydrated ? totalQuantity : 0;
-  const lines = hydrated ? items : [];
+  // The protection product (Navidium) never renders as a line and never counts
+  // toward "Bag (n)" — the toggle + subtotal are its only visible signals.
+  const allLines = hydrated ? items : [];
+  const lines = merchandiseLinesOf(allLines);
+  const count = hydrated ? totalQuantity - protectionQuantityOf(allLines) : 0;
   const subtotal = hydrated ? formatCurrency(subtotalAmount, currencyCode) : formatCurrency(0, currencyCode);
 
   // The drawer + backdrop stay mounted and slide/fade with CSS transitions —
@@ -95,8 +99,8 @@ export function CartDrawer() {
           )}
         </div>
 
-        {/* Shipping protection (Navidium) — only when the bag has lines */}
-        {lines.length > 0 && <ShippingProtection />}
+        {/* Shipping protection (Navidium) — only when the bag has merchandise */}
+        {lines.length > 0 && <ShippingProtection active={isOpen} />}
 
         {/* Footer */}
         {lines.length > 0 && (

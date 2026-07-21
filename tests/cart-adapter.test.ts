@@ -240,6 +240,7 @@ describe('mapCart', () => {
         lineId: 'gid://shopify/CartLine/abc123',
         merchandiseId: 'gid://shopify/ProductVariant/46514157256901',
         name: 'Shirts',
+        productHandle: 'shirts',
         price: 10,
         variantLabel: 'Small',
         quantity: 2,

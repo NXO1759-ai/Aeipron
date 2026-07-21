@@ -26,7 +26,7 @@ import { ContactForm } from './ContactForm';
 
 export const metadata: Metadata = {
   title: 'Contact Us — Apeiron',
-  description: 'Send a message to the Apeiron studio. We typically reply within one business day.',
+  description: 'Send a message to the Apeiron team. Every message is read — we reply within one business day.',
 };
 
 export default function ContactPage() {
@@ -39,8 +39,9 @@ export default function ContactPage() {
             Contact Us
           </h1>
           <p className="mt-4 text-ui-concrete leading-relaxed max-w-xl">
-            Questions, collaborations, or just saying hello — we read everything. We typically reply
-            within one business day.
+            Whatever&rsquo;s on your mind — an order, a fit question, or just saying hello —
+            we&rsquo;re here to help. Every message is read by our team, and you&rsquo;ll hear back
+            from us within one business day.
           </p>
         </header>
         <section>

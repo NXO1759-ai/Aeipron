@@ -7,18 +7,20 @@ import { motion, AnimatePresence } from "motion/react";
 import { usePathname } from "next/navigation";
 import { useCart } from "@/store/use-cart";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { protectionQuantityOf } from "@/lib/protection";
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const pathname = usePathname();
   const isHome = pathname === "/";
 
-  const { totalQuantity, toggleCart } = useCart();
+  const { items, totalQuantity, toggleCart } = useCart();
   const hydrated = useHydrated();
   // The badge reads the store's `totalQuantity` (sourced from Shopify's
-  // cart.totalQuantity) — the single source of truth. Gated behind
-  // `useHydrated` so the first client paint matches the server HTML (empty).
-  const itemCount = hydrated ? totalQuantity : 0;
+  // cart.totalQuantity) MINUS any protection lines — Navidium's product is
+  // not merchandise and never inflates the count. Gated behind `useHydrated`
+  // so the first client paint matches the server HTML (empty).
+  const itemCount = hydrated ? totalQuantity - protectionQuantityOf(items) : 0;
 
   // Collaborators is intentionally absent from the nav list (per client
   // direction). The /collaborators route + components are kept on disk for
