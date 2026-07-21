@@ -211,6 +211,11 @@ export const PRODUCT_BY_HANDLE_QUERY = `#graphql
       productSizing: metafield(namespace: "custom", key: "product_sizing") {
         value
       }
+      # Fit-scale position for the Reviews disclosure (json metafield — e.g.
+      # {"fit": 0} on the -2..+2 scale; parsed by lib/fit.ts). Detail only.
+      fitReview: metafield(namespace: "custom", key: "review") {
+        value
+      }
     }
   }
   ${PRODUCT_FRAGMENT}
