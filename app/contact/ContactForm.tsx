@@ -81,8 +81,8 @@ export function ContactForm() {
           Message sent
         </h2>
         <p className="text-ui-concrete leading-relaxed">
-          Thank you for reaching out. Your message is in good hands — a member of our team will
-          get back to you within one business day.
+          Thank you for reaching out. Your message is in good hands, as member of our team will
+          review and get back to you within one business day
         </p>
         <button
           type="button"
