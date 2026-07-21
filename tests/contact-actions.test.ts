@@ -4,10 +4,11 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // Contact server-action tests.
 //
 // The action delivers a contact message through two channels — an email to the
-// store inbox (Resend HTTP API) and a `contact_message` metaobject write
-// (Shopify Admin API) — and succeeds when at least one channel succeeds.
-// These tests mock `@/lib/shopify/admin-client` and the global `fetch` (the
-// Resend call) so nothing hits the network. They cover: the unconfigured-env
+// store inbox (SMTP via the vendored client, or the Resend HTTP API) and a
+// `contact_message` metaobject write (Shopify Admin API) — and succeeds when
+// at least one channel succeeds.
+// These tests mock `@/lib/shopify/admin-client`, `@/lib/smtp`, and the global
+// `fetch` (the Resend call) so nothing hits the network. They cover: the unconfigured-env
 // guard, zod rejection, the honeypot + time-trap bot drops, dual-channel
 // success, single-channel fallback, both-failed error mapping, and the email
 // payload shape (inbox, reply-to, plain-text body, phone included/omitted).
@@ -26,11 +27,18 @@ vi.mock('@/lib/shopify/admin-client', () => ({
   },
 }));
 
+// Mock the vendored SMTP client so the transport never opens a real socket.
+vi.mock('@/lib/smtp', () => ({
+  sendSmtpMail: vi.fn(),
+}));
+
 const { submitContactMessage } = await import('@/app/contact/actions');
 const { adminRequest, ShopifyAdminClientError } = await import('@/lib/shopify/admin-client');
 const { CONTACT_METAOBJECT_CREATE_MUTATION } = await import('@/lib/shopify/admin-queries');
+const { sendSmtpMail } = await import('@/lib/smtp');
 
 const mockAdminRequest = vi.mocked(adminRequest);
+const mockSendSmtpMail = vi.mocked(sendSmtpMail);
 const mockFetch = vi.fn();
 
 const VALID_INPUT = {
@@ -65,8 +73,15 @@ beforeEach(() => {
   vi.stubEnv('RESEND_API_KEY', RESEND_KEY);
   vi.stubEnv('CONTACT_EMAIL_TO', '');
   vi.stubEnv('CONTACT_EMAIL_FROM', '');
+  // SMTP is opt-in: unset by default so the existing cases exercise Resend.
+  vi.stubEnv('SMTP_HOST', '');
+  vi.stubEnv('SMTP_PORT', '');
+  vi.stubEnv('SMTP_USER', '');
+  vi.stubEnv('SMTP_PASS', '');
   mockAdminRequest.mockReset();
   mockFetch.mockReset();
+  mockSendSmtpMail.mockReset();
+  mockSendSmtpMail.mockResolvedValue(undefined);
   // Default: the Resend API accepts the email.
   mockFetch.mockResolvedValue({ ok: true, status: 200 });
   vi.stubGlobal('fetch', mockFetch);
@@ -175,6 +190,71 @@ describe('submitContactMessage — email delivery', () => {
     const body = sentEmail();
     expect(body.to).toEqual(['support@wearapeiron.com']);
     expect(body.from).toBe('Apeiron <store@wearapeiron.com>');
+  });
+});
+
+describe('submitContactMessage — SMTP transport (porkbun)', () => {
+  function stubSmtp(port = '465') {
+    vi.stubEnv('SMTP_HOST', 'smtp.porkbun.com');
+    vi.stubEnv('SMTP_PORT', port);
+    vi.stubEnv('SMTP_USER', 'hello@wearapeiron.com');
+    vi.stubEnv('SMTP_PASS', 'mailbox-password');
+  }
+
+  it('sends via SMTP when configured, without touching Resend', async () => {
+    stubSmtp();
+    mockAdminRequest.mockResolvedValueOnce(createdResponse());
+    const result = await submitContactMessage(VALID_INPUT);
+    expect(result.ok).toBe(true);
+    expect(mockSendSmtpMail).toHaveBeenCalledTimes(1);
+    const [creds, mail] = mockSendSmtpMail.mock.calls[0];
+    expect(creds).toEqual({
+      host: 'smtp.porkbun.com',
+      port: 465,
+      user: 'hello@wearapeiron.com',
+      pass: 'mailbox-password',
+    });
+    // Sender defaults to the authenticated mailbox (porkbun rejects From mismatches).
+    expect(mail.from).toBe('hello@wearapeiron.com');
+    expect(mail.to).toBe('hello@wearapeiron.com');
+    expect(mail.replyTo).toBe('jane@example.com');
+    expect(mail.subject).toBe('New contact message from Jane Doe');
+    expect(mail.text).toContain('Hello, I have a question about my order.');
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('passes SMTP_PORT through to the transport', async () => {
+    stubSmtp('587');
+    mockAdminRequest.mockResolvedValueOnce(createdResponse());
+    await submitContactMessage(VALID_INPUT);
+    expect(mockSendSmtpMail.mock.calls[0][0]).toEqual(expect.objectContaining({ port: 587 }));
+  });
+
+  it('succeeds when SMTP succeeds even if the metaobject write fails', async () => {
+    stubSmtp();
+    mockAdminRequest.mockRejectedValueOnce(new ShopifyAdminClientError('Shopify Admin API request failed', 401));
+    const result = await submitContactMessage(VALID_INPUT);
+    expect(result.ok).toBe(true);
+  });
+
+  it('succeeds when SMTP fails but the metaobject write succeeds', async () => {
+    stubSmtp();
+    mockSendSmtpMail.mockRejectedValueOnce(new Error('SMTP AUTH rejected with reply code 535'));
+    mockAdminRequest.mockResolvedValueOnce(createdResponse());
+    const result = await submitContactMessage(VALID_INPUT);
+    expect(result.ok).toBe(true);
+  });
+
+  it('returns the generic error when SMTP and the metaobject write BOTH fail', async () => {
+    stubSmtp();
+    mockSendSmtpMail.mockRejectedValueOnce(new Error('SMTP AUTH rejected with reply code 535'));
+    mockAdminRequest.mockRejectedValueOnce(new ShopifyAdminClientError('Shopify Admin API request failed', 401));
+    const result = await submitContactMessage(VALID_INPUT);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toBe('We could not send your message. Please try again shortly.');
+      expect(result.error).not.toContain('535');
+    }
   });
 });
 

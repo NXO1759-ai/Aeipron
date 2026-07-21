@@ -8,8 +8,11 @@
 // message through two independent channels (either alone is enough for the
 // submission to count as sent):
 //   1. EMAIL — every message is emailed to the store inbox
-//      (CONTACT_EMAIL_TO, default hello@wearapeiron.com) via the Resend HTTP
-//      API, with the customer's address as reply-to.
+//      (CONTACT_EMAIL_TO, default hello@wearapeiron.com), with the customer's
+//      address as reply-to. Two transports, checked in order:
+//        a. SMTP (porkbun or any provider) — when SMTP_HOST + SMTP_USER +
+//           SMTP_PASS are set (vendored RFC 5321 client; port 465 SSL).
+//        b. Resend HTTP API — when RESEND_API_KEY is set.
 //   2. SHOPIFY — the same message is written to a `contact_message` metaobject
 //      via the Admin API (`metaobjectCreate`) as a durable record in Shopify
 //      admin (Settings → Custom data → Metaobjects → Contact messages).
@@ -42,6 +45,7 @@
 //     volume outgrows this, add an IP/email rate limit or a captcha challenge.
 // ---------------------------------------------------------------------------
 
+import { sendSmtpMail } from '@/lib/smtp';
 import { contactFormSchema } from '@/lib/contact-schema';
 import { adminRequest, ShopifyAdminClientError } from '@/lib/shopify/admin-client';
 import { CONTACT_METAOBJECT_CREATE_MUTATION } from '@/lib/shopify/admin-queries';
@@ -76,35 +80,50 @@ interface MetaobjectCreateData {
   } | null;
 }
 
+/** The shared plain-text email shape (both transports send exactly this). */
+interface ContactEmail {
+  to: string;
+  replyTo: string;
+  subject: string;
+  text: string;
+}
+
 /**
- * Email the message to the store inbox via the Resend HTTP API
+ * Send via SMTP (porkbun hosted mail, or any provider) using the vendored
+ * RFC 5321 client in lib/smtp.ts. Requires SMTP_HOST + SMTP_USER + SMTP_PASS;
+ * SMTP_PORT defaults to 465 (implicit TLS). The sender defaults to SMTP_USER
+ * because porkbun (like most hosts) rejects mail whose From doesn't match the
+ * authenticated mailbox; CONTACT_EMAIL_FROM overrides it when the provider
+ * allows aliases. One TLS connection per send keeps this serverless-safe (no
+ * pooled sockets leaking across invocations). Returns false on any failure
+ * (logged server-side only; credentials never cross to the client).
+ */
+async function sendViaSmtp(email: ContactEmail): Promise<boolean> {
+  const host = process.env.SMTP_HOST as string;
+  const user = process.env.SMTP_USER as string;
+  const pass = process.env.SMTP_PASS as string;
+  const port = Number(process.env.SMTP_PORT || 465);
+  const from = process.env.CONTACT_EMAIL_FROM || user;
+  try {
+    await sendSmtpMail(
+      { host, port, user, pass },
+      { from, to: email.to, replyTo: email.replyTo, subject: email.subject, text: email.text },
+    );
+    return true;
+  } catch (err) {
+    console.error('[contact] SMTP send failed:', err instanceof Error ? err.message : 'unknown error');
+    return false;
+  }
+}
+
+/**
+ * Send via the Resend HTTP API
  * (https://resend.com/docs/api-reference/emails/send-email). Plain `fetch` —
  * no SDK dependency. Returns true on a 2xx, false on any failure (logged
  * server-side only; the API key is never exposed).
  */
-async function sendContactEmail(fields: {
-  name: string;
-  email: string;
-  phone?: string;
-  message: string;
-}): Promise<boolean> {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    console.error('[contact] RESEND_API_KEY env var is not set');
-    return false;
-  }
-  const to = process.env.CONTACT_EMAIL_TO || DEFAULT_CONTACT_EMAIL_TO;
+async function sendViaResend(apiKey: string, email: ContactEmail): Promise<boolean> {
   const from = process.env.CONTACT_EMAIL_FROM || 'Apeiron Contact <onboarding@resend.dev>';
-
-  // Plain-text body only — no HTML, so the message can't inject markup.
-  const lines = [
-    `Name: ${fields.name}`,
-    `Email: ${fields.email}`,
-    fields.phone ? `Phone: ${fields.phone}` : null,
-    '',
-    fields.message,
-  ].filter((line): line is string => line !== null);
-
   try {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -114,10 +133,10 @@ async function sendContactEmail(fields: {
       },
       body: JSON.stringify({
         from,
-        to: [to],
-        reply_to: fields.email,
-        subject: `New contact message from ${fields.name}`,
-        text: lines.join('\n'),
+        to: [email.to],
+        reply_to: email.replyTo,
+        subject: email.subject,
+        text: email.text,
       }),
     });
     if (!res.ok) {
@@ -129,6 +148,44 @@ async function sendContactEmail(fields: {
     console.error('[contact] email send failed: network error');
     return false;
   }
+}
+
+/**
+ * Email the message to the store inbox. Transport selection: SMTP when its
+ * env vars are present (porkbun hosted mail), otherwise Resend. Returns true
+ * when the message was accepted for delivery, false otherwise.
+ */
+async function sendContactEmail(fields: {
+  name: string;
+  email: string;
+  phone?: string;
+  message: string;
+}): Promise<boolean> {
+  // Plain-text body only — no HTML, so the message can't inject markup.
+  const lines = [
+    `Name: ${fields.name}`,
+    `Email: ${fields.email}`,
+    fields.phone ? `Phone: ${fields.phone}` : null,
+    '',
+    fields.message,
+  ].filter((line): line is string => line !== null);
+
+  const email: ContactEmail = {
+    to: process.env.CONTACT_EMAIL_TO || DEFAULT_CONTACT_EMAIL_TO,
+    replyTo: fields.email,
+    subject: `New contact message from ${fields.name}`,
+    text: lines.join('\n'),
+  };
+
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    return sendViaSmtp(email);
+  }
+  const apiKey = process.env.RESEND_API_KEY;
+  if (apiKey) {
+    return sendViaResend(apiKey, email);
+  }
+  console.error('[contact] no email transport configured (set SMTP_HOST/USER/PASS or RESEND_API_KEY)');
+  return false;
 }
 
 /**
