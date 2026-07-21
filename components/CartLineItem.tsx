@@ -15,6 +15,9 @@ import type { CartLine } from '@/lib/types';
 // key for update/remove. `price` is display-only (from Shopify cost). The qty
 // stepper clamps at MAX_QTY_PER_LINE (client UX only); ≤ 0 removes the line.
 // All mutations are delegated to the parent (which calls the cart store).
+//
+// The variant descriptor renders bare ("Champagne / medium") — no "Variant:"
+// prefix; the label itself already reads as color / size.
 // ---------------------------------------------------------------------------
 
 export function CartLineItem({
@@ -43,7 +46,7 @@ export function CartLineItem({
             <h3 className="text-primary-cream uppercase tracking-wider font-bold text-sm">{item.name}</h3>
             <p className="text-primary-cream font-mono">{formatCurrency(item.price, currencyCode)}</p>
           </div>
-          <p className="text-ui-concrete text-sm mt-1">Variant: {item.variantLabel}</p>
+          <p className="text-ui-concrete text-sm mt-1">{item.variantLabel}</p>
         </div>
         <div className="flex justify-between items-center mt-4">
           {/* Quantity stepper */}
