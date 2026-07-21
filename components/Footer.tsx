@@ -163,7 +163,7 @@ export function Footer() {
               Join the List
             </h2>
             <p className="text-ui-concrete text-xs leading-relaxed">
-              Early access to new drops and studio news. No noise — unsubscribe anytime.
+              Early access to new drops and studio collaborations.
             </p>
             <NewsletterForm />
           </div>
