@@ -677,3 +677,35 @@ export const CART_SELECTED_DELIVERY_OPTIONS_UPDATE_MUTATION = `#graphql
   ${CART_FRAGMENT}
   ${DELIVERY_GROUPS_FRAGMENT}
 `;
+
+/**
+ * Operation 15 — read the Help Center Q&A entries.
+ *
+ * The merchant edits Help Center content in Shopify admin (Settings → Custom
+ * data → Metaobjects → Help question) — one `help_question` metaobject per
+ * accordion item, with fields:
+ *   section  (single_line_text) — the accordion group, e.g. "Orders"
+ *   question (single_line_text) — the disclosure summary
+ *   answer   (multi_line_text)  — the disclosure body (plain text, one
+ *                                 paragraph per line)
+ *   position (number_integer)   — manual sort order (ascending)
+ * The definition must have Storefront API access enabled (its default when
+ * created via "Add definition"). When no entries exist (feature not set up
+ * yet), the caller falls back to the static defaults — the page never 500s.
+ *
+ * Named operation `HelpQuestions` for Shopify query tracking.
+ */
+export const HELP_QUESTIONS_QUERY = `#graphql
+  query HelpQuestions {
+    metaobjects(type: "help_question", first: 100) {
+      edges {
+        node {
+          fields {
+            key
+            value
+          }
+        }
+      }
+    }
+  }
+`;
