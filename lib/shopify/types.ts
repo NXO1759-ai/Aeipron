@@ -229,7 +229,7 @@ export interface ShopifyCartDeliveryOption {
   title: string | null;
   description: string | null;
   estimatedCost: ShopifyCartMoney; // MoneyV2 — amount (string) + currencyCode
-  deliveryMethodType: string; // SHIPPING | PICKUP | LOCAL
+  deliveryMethodType: string; // DeliveryMethodType enum: SHIPPING | PICKUP | LOCAL
 }
 
 /** A delivery group: the address + the available/selected shipping options. */
