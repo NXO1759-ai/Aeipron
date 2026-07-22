@@ -7,12 +7,12 @@ import { FooterLegal } from './FooterLegal';
 // ---------------------------------------------------------------------------
 // Footer — redesigned site-wide footer (reference image).
 //
-// Three columns on desktop:
+// Four columns on desktop (two on mobile, brand/newsletter spanning full width):
 //   1. Brand block — Apeiron text lockup (matches Header), Japanese tagline,
 //      "Beyond the trend." line.
-//   2. Footer links — Shop, Our Story, Help Center, Contact Us (with arrows)
-//      in ONE flat list — no group labels, everything on the same level.
-//   3. Join the List — newsletter copy + NewsletterForm email capture, then a
+//   2. Shop links — Shop, Our Story (with arrows), no group label.
+//   3. Support links — Help Center, Contact Us (with arrows), no group label.
+//   4. Join the List — newsletter copy + NewsletterForm email capture, then a
 //      divider and the shipping-from address + social icons BELOW it.
 //
 // Bottom bar: copyright (left), legal links (right) — Privacy Policy, Refund
@@ -26,9 +26,12 @@ import { FooterLegal } from './FooterLegal';
 // render the footer as a Server Component passed via children, not imported here.
 // ---------------------------------------------------------------------------
 
-const footerLinks = [
+const shopLinks = [
   { label: 'Shop', href: '/shop' },
   { label: 'Our Story', href: '/story' },
+];
+
+const supportLinks = [
   { label: 'Help Center', href: '/help' },
   { label: 'Contact Us', href: '/contact' },
 ];
@@ -90,9 +93,9 @@ export function Footer() {
   return (
     <footer className="bg-apeiron-black text-apeiron-ivory border-t border-ui-concrete/20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12 lg:gap-8">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-12">
           {/* Brand block */}
-          <div className="flex flex-col gap-4">
+          <div className="col-span-2 lg:col-span-1 flex flex-col gap-4">
             <div className="flex flex-col items-start">
               <Link href="/" className="group">
                 <h2 className="text-2xl font-bold uppercase tracking-[0.2em] text-apeiron-ivory leading-none">
@@ -109,17 +112,26 @@ export function Footer() {
             </p>
           </div>
 
-          {/* Footer links — one flat list, no group labels */}
-          <nav aria-label="Footer" className="flex flex-col gap-4">
+          {/* Shop links — left column (no group label) */}
+          <nav aria-label="Shop" className="flex flex-col gap-4">
             <div className="flex flex-col gap-3">
-              {footerLinks.map((link) => (
+              {shopLinks.map((link) => (
+                <ArrowLink key={link.href} href={link.href}>{link.label}</ArrowLink>
+              ))}
+            </div>
+          </nav>
+
+          {/* Support links — the column on the right (no group label) */}
+          <nav aria-label="Support" className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3">
+              {supportLinks.map((link) => (
                 <ArrowLink key={link.href} href={link.href}>{link.label}</ArrowLink>
               ))}
             </div>
           </nav>
 
           {/* Join the List + shipping/socials below it */}
-          <div className="flex flex-col gap-4">
+          <div className="col-span-2 lg:col-span-1 flex flex-col gap-4">
             <h2 className="text-ui-concrete uppercase tracking-widest text-xs font-bold">
               Join the List
             </h2>
