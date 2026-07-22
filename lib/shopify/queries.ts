@@ -217,9 +217,10 @@ export const PRODUCT_BY_HANDLE_QUERY = `#graphql
         value
       }
       # Garment size grading for the size selector's measurement readout (json
-      # metafield — e.g. {"unit": "in", "anchor": "L", "chest": 23, "length":
-      # 46, "chestStep": 5, "lengthStep": 3}; parsed by
-      # lib/size-measurements.ts). Detail only.
+      # metafield — e.g. {"unit": "in", "anchor": "M", "chest": 23, "length":
+      # 46, "chestStep": 5, "lengthStep": 5}; parsed by
+      # lib/size-measurements.ts; products without it fall back to that house
+      # default). Detail only.
       sizeMeasurements: metafield(namespace: "custom", key: "size_measurements") {
         value
       }

@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { useCart } from '@/store/use-cart';
 import { resolveSelectedVariant, resolvePreviewVariant, variantDescriptor } from '@/lib/product';
 import { splitOptionValues } from '@/lib/size-selector';
-import { isSizeGroup, measurementsForSizes } from '@/lib/size-measurements';
+import { isSizeGroup, measurementsForSizes, resolveSizeMeasurements } from '@/lib/size-measurements';
 import { RichText } from '@/components/RichText';
 import { SizeSelector } from '@/components/SizeSelector';
 import { ColorSwatchGroup, isColorGroup } from '@/components/product/ColorSwatch';
@@ -189,12 +189,16 @@ export function ProductExperience({ product, reviewData }: { product: Product; r
 
               const { sizes, soldOut } = splitOptionValues(group.values);
               // Garment measurements (chest/length) belong to the Size group
-              // only, and only when the product carries a valid
-              // `custom.size_measurements` metafield — otherwise no readout.
-              const measurements =
-                product.sizeMeasurements && isSizeGroup(group.name)
-                  ? measurementsForSizes(product.sizeMeasurements, sizes)
-                  : undefined;
+              // only. The product's `custom.size_measurements` metafield
+              // drives them when present; otherwise the readout falls back
+              // to the house default (23 IN / 46 IN at the middle size, ±5
+              // per step) so every product page always shows it.
+              const measurementConfig = isSizeGroup(group.name)
+                ? resolveSizeMeasurements(product.sizeMeasurements, sizes)
+                : undefined;
+              const measurements = measurementConfig
+                ? measurementsForSizes(measurementConfig, sizes)
+                : undefined;
 
               return (
                 <div key={group.name} className="mb-10">
@@ -226,7 +230,7 @@ export function ProductExperience({ product, reviewData }: { product: Product; r
                     soldOut={soldOut}
                     defaultSize={selections[group.name]}
                     measurements={measurements}
-                    measurementUnit={product.sizeMeasurements?.unit}
+                    measurementUnit={measurementConfig?.unit}
                     onChange={(value) => selectOption(group.name, value)}
                   />
                 </div>
