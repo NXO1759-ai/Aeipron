@@ -1,6 +1,8 @@
 // Shared domain types. Kept framework-agnostic so they can be imported by
 // server components, server actions, and client components alike.
 
+import type { SizeMeasurements } from './size-measurements';
+
 /**
  * A single selectable value within a product option group (e.g. "Red", "Small").
  * `inStock` is an AGGREGATE across every variant that offers this value — true
@@ -94,6 +96,12 @@ export interface Product {
   // lib/fit.ts. Undefined only for nodes that don't select the metafield
   // (collection cards) — the PDP always resolves it (default 0).
   fit?: number;
+  // Garment size-grading config (anchor chest/length + per-step increments),
+  // parsed from the `custom.size_measurements` json metafield by
+  // lib/size-measurements.ts. Drives the "CHEST … · LENGTH …" readout under
+  // the PDP size selector. Undefined when the product has no (valid) metafield
+  // — the readout simply doesn't render.
+  sizeMeasurements?: SizeMeasurements;
 }
 
 export interface MerchItem {

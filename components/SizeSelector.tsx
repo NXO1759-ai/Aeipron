@@ -31,6 +31,8 @@ import {
   lastEnabledIndex,
   nextEnabledIndex,
 } from '@/lib/size-selector';
+import type { SizeMeasurement } from '@/lib/size-measurements';
+import { useTweenedNumber } from '@/hooks/use-tweened-number';
 
 export type SizeSelectorProps = {
   /** All sizes, in display order. */
@@ -39,6 +41,16 @@ export type SizeSelectorProps = {
   soldOut?: string[];
   /** Initially selected size (ignored when it is sold out). */
   defaultSize?: string;
+  /** Accessible name for the radiogroup — matches the visible PDP header
+   * ("Select Size", "Select Length", …). */
+  label?: string;
+  /** Per-size garment measurements, aligned with `sizes` (from the product's
+   * size_measurements metafield via lib/size-measurements). When provided, a
+   * "CHEST n UNIT · LENGTH n UNIT" readout renders under the ruler track and
+   * follows the selection with a number tween; absent → no readout. */
+  measurements?: readonly (SizeMeasurement | undefined)[];
+  /** Display unit for the readout ("IN" / "CM") — shown uppercased. */
+  measurementUnit?: string;
   /** Fires only when the selection actually changes. */
   onChange?: (size: string) => void;
 };
@@ -49,7 +61,15 @@ const MARKER_HALF_WIDTH = 5;
 // SSR-safe layout effect: useLayoutEffect warns when run on the server.
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
-export function SizeSelector({ sizes, soldOut = [], defaultSize, onChange }: SizeSelectorProps) {
+export function SizeSelector({
+  sizes,
+  soldOut = [],
+  defaultSize,
+  label = 'Select size',
+  measurements,
+  measurementUnit = 'IN',
+  onChange,
+}: SizeSelectorProps) {
   const soldOutSet = new Set(soldOut);
   const [selected, setSelected] = useState<string | null>(
     defaultSize && !soldOutSet.has(defaultSize) ? defaultSize : null,
@@ -75,6 +95,16 @@ export function SizeSelector({ sizes, soldOut = [], defaultSize, onChange }: Siz
   // first enabled size takes it. Sold-out pills stay reachable via arrows but
   // out of the Tab order unless they hold the stop.
   const tabbableIndex = selectedIndex >= 0 ? selectedIndex : firstEnabledIndex(sizes, soldOut);
+
+  // Measurement readout (rendered only when the product supplies per-size
+  // data): the visible numbers tween with the same easing as the marker, so
+  // the whole instrument glides together; AT gets a separate live region that
+  // announces only the SETTLED value, never the intermediate tween frames.
+  const activeMeasurement =
+    measurements && selectedIndex >= 0 ? measurements[selectedIndex] : undefined;
+  const chestDisplay = useTweenedNumber(activeMeasurement?.chest ?? null);
+  const lengthDisplay = useTweenedNumber(activeMeasurement?.length ?? null);
+  const unit = measurementUnit.toUpperCase();
 
   // Measure after every selection change (layout effect → no visible jump)…
   useIsomorphicLayoutEffect(() => {
@@ -135,7 +165,7 @@ export function SizeSelector({ sizes, soldOut = [], defaultSize, onChange }: Siz
   return (
     <div
       role="radiogroup"
-      aria-label="Select size"
+      aria-label={label}
       className="size-selector w-full select-none bg-transparent"
       onKeyDown={onKeyDown}
     >
@@ -179,6 +209,24 @@ export function SizeSelector({ sizes, soldOut = [], defaultSize, onChange }: Siz
           style={{ transform: `translateX(${markerX}px)` }}
         />
       </div>
+
+      {/* Garment measurements for the selected size (per-product metafield
+          data). Always rendered when data exists so the layout never shifts
+          on first selection; placeholders sit in until a size is picked. */}
+      {measurements ? (
+        <p className="mt-8 text-center font-mono text-xs uppercase tracking-[0.3em] text-ui-concrete">
+          <span className="sr-only" aria-live="polite">
+            {activeMeasurement
+              ? `Chest ${activeMeasurement.chest} ${unit}, length ${activeMeasurement.length} ${unit}`
+              : ''}
+          </span>
+          <span aria-hidden="true">
+            Chest <span className="tabular-nums">{chestDisplay ?? '—'}</span> {unit}
+            {'  ·  '}
+            Length <span className="tabular-nums">{lengthDisplay ?? '—'}</span> {unit}
+          </span>
+        </p>
+      ) : null}
     </div>
   );
 }

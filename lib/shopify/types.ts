@@ -100,6 +100,11 @@ export interface ShopifyProductNode {
   // fit-scale position for the Reviews disclosure. `value` is a JSON string
   // parsed by lib/fit.ts. Detail query only.
   fitReview?: { value: string | null } | null;
+  // `custom.size_measurements` json metafield — the garment's size-grading
+  // config (anchor chest/length + per-step increments) for the size selector's
+  // measurement readout. `value` is a JSON string parsed by
+  // lib/size-measurements.ts. Detail query only.
+  sizeMeasurements?: { value: string | null } | null;
 }
 
 /** A Shopify Collection (category) node. */

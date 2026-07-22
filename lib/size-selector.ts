@@ -11,6 +11,25 @@
 // Pure module (no React, no DOM): fully unit-testable in the node env.
 // ---------------------------------------------------------------------------
 
+/**
+ * Map a PDP option group's values (lib/types `ProductOptionValue`) to
+ * SizeSelector props: every value becomes a pill, in display order; values
+ * whose aggregate stock is out go to `soldOut`. Structural typing keeps this
+ * module free of imports from lib/types.
+ */
+export function splitOptionValues(values: readonly { value: string; inStock: boolean }[]): {
+  sizes: string[];
+  soldOut: string[];
+} {
+  const sizes: string[] = [];
+  const soldOut: string[] = [];
+  for (const entry of values) {
+    sizes.push(entry.value);
+    if (!entry.inStock) soldOut.push(entry.value);
+  }
+  return { sizes, soldOut };
+}
+
 /** Indexes of sizes that are NOT sold out, in ascending order. */
 export function enabledIndexes(sizes: readonly string[], soldOut: readonly string[] = []): number[] {
   const sold = new Set(soldOut);
