@@ -19,6 +19,7 @@
 // ---------------------------------------------------------------------------
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useDialogExit } from '@/hooks/use-dialog-exit';
 import {
   parseLegalHtml,
   redactBlocks,
@@ -151,12 +152,15 @@ function LegalDialog({
   onOpenDocument: (id: LegalDocumentId) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Esc/backdrop/× all route through requestClose so the pop-up plays its
+  // outro (backdrop fade + panel drift) before unmounting.
+  const { closing, requestClose } = useDialogExit(onClose);
 
   // Esc closes; page scroll locks while the pop-up is open (same contract
   // as the Reviews pop-up).
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') requestClose();
     };
     document.addEventListener('keydown', onKey);
     const previousOverflow = document.body.style.overflow;
@@ -165,7 +169,7 @@ function LegalDialog({
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = previousOverflow;
     };
-  }, [onClose]);
+  }, [requestClose]);
 
   // Switching documents (a "[LINK]" action) starts the new policy at the top.
   useEffect(() => {
@@ -174,15 +178,19 @@ function LegalDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-apeiron-black/85 p-4 sm:items-center"
-      onClick={onClose}
+      className={`fixed inset-0 z-50 flex items-end justify-center bg-apeiron-black/85 p-4 sm:items-center ${
+        closing ? 'dialog-backdrop-out' : 'dialog-backdrop-in'
+      }`}
+      onClick={requestClose}
     >
       <div
         ref={scrollRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="max-h-[80vh] w-full max-w-2xl overflow-y-auto overscroll-contain border border-ui-concrete/20 bg-primary-obsidian p-6 animate-[modal-in_200ms_ease-out] md:p-8"
+        className={`max-h-[80vh] w-full max-w-2xl overflow-y-auto overscroll-contain border border-ui-concrete/20 bg-primary-obsidian p-6 md:p-8 ${
+          closing ? 'dialog-panel-out' : 'dialog-panel-in'
+        }`}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-4">
@@ -191,7 +199,7 @@ function LegalDialog({
           </h3>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             autoFocus
             aria-label={`Close ${title}`}
             className="cursor-pointer text-xl leading-none text-ui-concrete transition-colors hover:text-primary-cream"
