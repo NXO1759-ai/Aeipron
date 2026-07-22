@@ -9,7 +9,7 @@ import { isSizeGroup, measurementsForSizes, resolveSizeMeasurements } from '@/li
 import { RichText } from '@/components/RichText';
 import { SizeSelector } from '@/components/SizeSelector';
 import { ColorSwatchGroup, isColorGroup } from '@/components/product/ColorSwatch';
-import { SmoothDisclosure } from '@/components/product/SmoothDisclosure';
+import { DisclosureGroup, SmoothDisclosure } from '@/components/product/SmoothDisclosure';
 import { ReviewsSection } from '@/components/product/ReviewsSection';
 import type { ProductReviewData } from '@/lib/judge-me';
 import type { Product, ProductOption } from '@/lib/types';
@@ -63,6 +63,16 @@ export function ProductExperience({ product, reviewData }: { product: Product; r
     manualIndex != null
       ? product.images[manualIndex] ?? ''
       : previewVariant?.image || product.images[0] || '';
+
+  // Crossfade gallery: every image stays mounted in a stacked layer and only
+  // the active one is opaque — mobile swipe steps and desktop thumbnail clicks
+  // both fade smoothly instead of snapping. The variant's image may not be in
+  // product.images, so it's appended when missing. Reduced-motion users get an
+  // instant swap (motion-safe: prefix on the transition).
+  const galleryImages =
+    activeImage && !product.images.includes(activeImage)
+      ? [...product.images, activeImage]
+      : product.images;
 
   // Mobile gallery: the main image is swipeable left/right (the thumbnail
   // strip is desktop-only). A horizontal swipe cycles through product.images
@@ -137,15 +147,20 @@ export function ProductExperience({ product, reviewData }: { product: Product; r
               onTouchEnd={handleGalleryTouchEnd}
             >
               {activeImage ? (
-                <Image
-                  key={activeImage}
-                  src={activeImage}
-                  alt={`${product.name}`}
-                  fill
-                  priority
-                  sizes="(min-width: 1024px) 50vw, 100vw"
-                  className="object-cover"
-                />
+                galleryImages.map((src) => (
+                  <Image
+                    key={src}
+                    src={src}
+                    alt={src === activeImage ? product.name : ''}
+                    aria-hidden={src !== activeImage}
+                    fill
+                    priority={src === product.images[0]}
+                    sizes="(min-width: 1024px) 50vw, 100vw"
+                    className={`object-cover motion-safe:transition-opacity motion-safe:duration-500 motion-safe:ease-out ${
+                      src === activeImage ? 'opacity-100' : 'opacity-0'
+                    }`}
+                  />
+                ))
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center text-ui-concrete/40 text-sm uppercase tracking-widest">
                   No image
@@ -290,24 +305,28 @@ export function ProductExperience({ product, reviewData }: { product: Product; r
                 json metafield → product.fit) with the Judge.me review data
                 fetched server-side and passed in as props. */}
             <div className="mt-16 space-y-6 border-t border-ui-concrete/20 pt-8">
-              {[
-                { title: 'Details & Fabrication', value: product.detailsFabrication },
-                { title: 'Product Care', value: product.productCare },
-                { title: 'Product Sizing', value: product.productSizing },
-              ].map((section) => (
-                <SmoothDisclosure key={section.title} summary={section.title}>
-                  {section.value ? (
-                    <div className="space-y-2">
-                      <RichText value={section.value} />
-                    </div>
-                  ) : (
-                    <p className="italic">{NO_CONTENT_MESSAGE}</p>
-                  )}
+              {/* DisclosureGroup: single-open accordion — opening one row
+                  smoothly retracts the previous one. */}
+              <DisclosureGroup>
+                {[
+                  { title: 'Details & Fabrication', value: product.detailsFabrication },
+                  { title: 'Product Care', value: product.productCare },
+                  { title: 'Product Sizing', value: product.productSizing },
+                ].map((section) => (
+                  <SmoothDisclosure key={section.title} summary={section.title}>
+                    {section.value ? (
+                      <div className="space-y-2">
+                        <RichText value={section.value} />
+                      </div>
+                    ) : (
+                      <p className="italic">{NO_CONTENT_MESSAGE}</p>
+                    )}
+                  </SmoothDisclosure>
+                ))}
+                <SmoothDisclosure summary="Reviews">
+                  <ReviewsSection fit={product.fit ?? 0} data={reviewData} />
                 </SmoothDisclosure>
-              ))}
-              <SmoothDisclosure summary="Reviews">
-                <ReviewsSection fit={product.fit ?? 0} data={reviewData} />
-              </SmoothDisclosure>
+              </DisclosureGroup>
             </div>
           </div>
         </div>

@@ -25,8 +25,8 @@ export default async function ShopPage() {
     <div className="min-h-screen bg-apeiron-black text-apeiron-ivory pb-24">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
-        {/* Header — right-aligned on all viewports (brand direction). */}
-        <div className="flex flex-col md:flex-row justify-end items-end mb-16 border-b border-ui-concrete/20 pb-8 pt-8 text-right">
+        {/* Header — left-aligned (brand direction). */}
+        <div className="flex flex-col md:flex-row justify-between items-end mb-16 border-b border-ui-concrete/20 pb-8 pt-8">
           <div>
             <h1 className="font-inter text-4xl md:text-5xl font-medium uppercase tracking-tighter mb-4">
               Shop

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getHelpSections } from '@/lib/help-content';
-import { Disclosure } from '@/components/Disclosure';
+import { DisclosureGroup, SmoothDisclosure } from '@/components/product/SmoothDisclosure';
 
 // ---------------------------------------------------------------------------
 // /help — the Help Center page.
@@ -62,36 +62,41 @@ export default async function HelpPage() {
         </header>
 
         <div className="space-y-10">
-          {sections.map((section) => {
-            const slug = slugify(section.heading);
-            return (
-              <section key={slug} aria-labelledby={`faq-${slug}`}>
-                <h2
-                  id={`faq-${slug}`}
-                  className="text-lg font-bold uppercase tracking-widest text-primary-cream mb-4"
-                >
-                  {section.heading}
-                </h2>
-                <div className="space-y-1">
-                  {section.items.map((item, index) => (
-                    <Disclosure key={`${slug}-${index}`} summary={item.question}>
-                      {/* Metaobject answers are multi-line plain text — each
-                          non-empty line renders as its own paragraph. */}
-                      {item.answer
-                        .split('\n')
-                        .map((line) => line.trim())
-                        .filter(Boolean)
-                        .map((line, lineIndex) => (
-                          <p key={lineIndex} className="[&:not(:first-child)]:mt-2">
-                            {line}
-                          </p>
-                        ))}
-                    </Disclosure>
-                  ))}
-                </div>
-              </section>
-            );
-          })}
+          {/* One DisclosureGroup across the whole page: opening any answer
+              smoothly retracts the previously open one — the same single-open
+              accordion as the PDP. */}
+          <DisclosureGroup>
+            {sections.map((section) => {
+              const slug = slugify(section.heading);
+              return (
+                <section key={slug} aria-labelledby={`faq-${slug}`}>
+                  <h2
+                    id={`faq-${slug}`}
+                    className="text-lg font-bold uppercase tracking-widest text-primary-cream mb-4"
+                  >
+                    {section.heading}
+                  </h2>
+                  <div className="space-y-1">
+                    {section.items.map((item, index) => (
+                      <SmoothDisclosure key={`${slug}-${index}`} summary={item.question}>
+                        {/* Metaobject answers are multi-line plain text — each
+                            non-empty line renders as its own paragraph. */}
+                        {item.answer
+                          .split('\n')
+                          .map((line) => line.trim())
+                          .filter(Boolean)
+                          .map((line, lineIndex) => (
+                            <p key={lineIndex} className="[&:not(:first-child)]:mt-2">
+                              {line}
+                            </p>
+                          ))}
+                      </SmoothDisclosure>
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
+          </DisclosureGroup>
         </div>
       </div>
     </div>

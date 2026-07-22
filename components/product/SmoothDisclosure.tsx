@@ -1,22 +1,46 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { createContext, useCallback, useContext, useId, useState } from 'react';
 
 // ---------------------------------------------------------------------------
-// SmoothDisclosure — the PDP accordion row (Details & Fabrication, Product
-// Care, Product Sizing, Reviews).
+// SmoothDisclosure — the accordion row used on the PDP (Details & Fabrication,
+// Product Care, Product Sizing, Reviews) and the Help Center.
 //
-// Same visual language as the native <details> pattern it replaces (uppercase
-// tracking-widest bold summary, `+` glyph rotating to `×`, ui-concrete/20
-// bottom border), but the open/close motion runs on the compositor like the
-// cart drawer: the body is a CSS grid whose rows animate 0fr → 1fr, plus an
-// opacity fade — no layout thrash, no animation library, no jump when the
-// content is taller than the viewport.
+// The open/close motion runs on the compositor like the cart drawer: the body
+// is a CSS grid whose rows animate 0fr → 1fr, plus an opacity fade — no layout
+// thrash, no animation library, no jump when the content is taller than the
+// viewport. Unlike native <details>, closing animates too.
+//
+// ACCENT: no persistent accent while open — the energy accent is transient
+// feedback only: hover on pointer devices, `active:` (the touch accent) while
+// a finger/stylus presses.
+//
+// ACCORDION: wrap siblings in <DisclosureGroup> and only ONE row stays open at
+// a time — opening another smoothly retracts the previous one. Used
+// standalone (no group), each row keeps its own independent state.
 //
 // Accessibility: a real <button> with aria-expanded/aria-controls; the body
 // is inert while closed so its links can't receive keyboard focus inside a
 // collapsed row.
 // ---------------------------------------------------------------------------
+
+const DisclosureGroupContext = createContext<{
+  openId: string | null;
+  toggle: (id: string) => void;
+} | null>(null);
+
+/** Groups SmoothDisclosure rows into a single-open accordion. */
+export function DisclosureGroup({ children }: { children: React.ReactNode }) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const toggle = useCallback((id: string) => {
+    setOpenId((current) => (current === id ? null : id));
+  }, []);
+  return (
+    <DisclosureGroupContext.Provider value={{ openId, toggle }}>
+      {children}
+    </DisclosureGroupContext.Provider>
+  );
+}
 
 type SmoothDisclosureProps = {
   /** The summary line, rendered uppercase + bold. */
@@ -26,8 +50,16 @@ type SmoothDisclosureProps = {
 };
 
 export function SmoothDisclosure({ summary, children }: SmoothDisclosureProps) {
-  const [open, setOpen] = useState(false);
+  const group = useContext(DisclosureGroupContext);
+  const id = useId();
+  const [openLocal, setOpenLocal] = useState(false);
+  const open = group ? group.openId === id : openLocal;
   const bodyId = useId();
+
+  const handleToggle = () => {
+    if (group) group.toggle(id);
+    else setOpenLocal((prev) => !prev);
+  };
 
   return (
     <div className="border-b border-ui-concrete/20 pb-6">
@@ -35,10 +67,8 @@ export function SmoothDisclosure({ summary, children }: SmoothDisclosureProps) {
         type="button"
         aria-expanded={open}
         aria-controls={bodyId}
-        onClick={() => setOpen((prev) => !prev)}
-        className={`flex w-full cursor-pointer items-center justify-between text-left text-sm font-bold uppercase tracking-widest transition-colors hover:text-accent-energy ${
-          open ? 'text-accent-energy' : ''
-        }`}
+        onClick={handleToggle}
+        className="flex w-full cursor-pointer items-center justify-between text-left text-sm font-bold uppercase tracking-widest transition-colors hover:text-accent-energy active:text-accent-energy"
       >
         {summary}
         <span
