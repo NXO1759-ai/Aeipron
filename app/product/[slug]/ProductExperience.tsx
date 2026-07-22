@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useCart } from '@/store/use-cart';
 import { resolveSelectedVariant, resolvePreviewVariant, variantDescriptor } from '@/lib/product';
 import { splitOptionValues } from '@/lib/size-selector';
+import { isSizeGroup, measurementsForSizes } from '@/lib/size-measurements';
 import { RichText } from '@/components/RichText';
 import { SizeSelector } from '@/components/SizeSelector';
 import { ColorSwatchGroup, isColorGroup } from '@/components/product/ColorSwatch';
@@ -169,20 +170,33 @@ export function ProductExperience({ product, reviewData }: { product: Product; r
 
             <p className="text-sm text-ui-concrete leading-relaxed mb-12">{product.description}</p>
 
-            {product.options.map((group: ProductOption) =>
+            {product.options.map((group: ProductOption) => {
               // The Color group renders as visual color checkpoints (round
               // dots); every other group (Size, etc.) renders as the
               // sliding-marker SizeSelector. Both drive the SAME selections
               // Record + resolveSelectedVariant, so the cart still resolves
               // the exact variant GID.
-              isColorGroup(group.name) ? (
-                <ColorSwatchGroup
-                  key={group.name}
-                  group={group}
-                  selectedValue={selections[group.name]}
-                  onSelect={selectOption}
-                />
-              ) : (
+              if (isColorGroup(group.name)) {
+                return (
+                  <ColorSwatchGroup
+                    key={group.name}
+                    group={group}
+                    selectedValue={selections[group.name]}
+                    onSelect={selectOption}
+                  />
+                );
+              }
+
+              const { sizes, soldOut } = splitOptionValues(group.values);
+              // Garment measurements (chest/length) belong to the Size group
+              // only, and only when the product carries a valid
+              // `custom.size_measurements` metafield — otherwise no readout.
+              const measurements =
+                product.sizeMeasurements && isSizeGroup(group.name)
+                  ? measurementsForSizes(product.sizeMeasurements, sizes)
+                  : undefined;
+
+              return (
                 <div key={group.name} className="mb-10">
                   <div className="mb-6 flex justify-between items-end">
                     <span className="uppercase tracking-widest text-sm font-bold">Select {group.name}</span>
@@ -203,16 +217,21 @@ export function ProductExperience({ product, reviewData }: { product: Product; r
                       keyboard nav; picking a value writes into the same
                       `selections` Record the old button row used. Uncontrolled —
                       the selector owns its pill state and reports changes up via
-                      onChange, exactly like the demo page. */}
+                      onChange, exactly like the demo page. When the product
+                      supplies size measurements, the selector renders the
+                      "CHEST … · LENGTH …" readout under its ruler track. */}
                   <SizeSelector
                     label={`Select ${group.name}`}
-                    {...splitOptionValues(group.values)}
+                    sizes={sizes}
+                    soldOut={soldOut}
                     defaultSize={selections[group.name]}
+                    measurements={measurements}
+                    measurementUnit={product.sizeMeasurements?.unit}
                     onChange={(value) => selectOption(group.name, value)}
                   />
                 </div>
-              ),
-            )}
+              );
+            })}
 
             <button
               type="button"
