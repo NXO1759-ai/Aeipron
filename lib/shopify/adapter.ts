@@ -22,6 +22,7 @@
 import 'server-only';
 
 import { parseFitScale } from '@/lib/fit';
+import { parseSizeMeasurements } from '@/lib/size-measurements';
 import type {
   Product,
   ProductOption,
@@ -82,6 +83,10 @@ export function mapProduct(node: ShopifyProductNode): Product {
     // anything unparseable becomes 0, True To Size), so the client only ever
     // sees a number.
     fit: parseFitScale(node.fitReview?.value),
+    // Same posture for the size-grading config: parsed once here (tolerant —
+    // anything unparseable becomes undefined), so the size selector only ever
+    // sees a validated config and renders no readout otherwise.
+    sizeMeasurements: parseSizeMeasurements(node.sizeMeasurements?.value),
   };
 }
 
