@@ -160,7 +160,7 @@ export function CartView() {
               disabled={checkoutStatus === 'redirecting'}
               className="mt-6 block w-full bg-primary-cream text-primary-obsidian py-4 text-center uppercase tracking-widest font-bold hover:bg-white transition-colors disabled:opacity-60"
             >
-              {checkoutStatus === 'redirecting' ? 'Redirecting to checkout…' : 'Proceed to checkout'}
+              {checkoutStatus === 'redirecting' ? 'Checking out…' : 'Proceed to checkout'}
             </button>
           )}
 

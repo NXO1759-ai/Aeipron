@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { getCheckoutUrl } from '@/app/cart/actions';
 
 // ---------------------------------------------------------------------------
@@ -29,6 +29,19 @@ export type CheckoutRedirectStatus = 'idle' | 'redirecting' | 'error';
 
 export function useCheckoutRedirect() {
   const [status, setStatus] = useState<CheckoutRedirectStatus>('idle');
+
+  // Back-forward cache: window.location.href navigates away to Shopify's
+  // hosted checkout, and the browser Back button later restores THIS page
+  // from the bfcache with React state intact — the button would stay stuck on
+  // "Checking out…" forever. `pageshow` with event.persisted fires exactly on
+  // that restore, so reset to idle and the button works again.
+  useEffect(() => {
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) setStatus('idle');
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
 
   const redirect = useCallback(async () => {
     setStatus('redirecting');

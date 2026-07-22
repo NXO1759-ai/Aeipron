@@ -44,7 +44,7 @@ export function CheckoutButton() {
       disabled={status === 'redirecting'}
       className="w-full bg-accent-energy text-primary-cream py-6 uppercase tracking-widest font-bold hover:bg-accent-energy/90 transition-colors disabled:opacity-60"
     >
-      {status === 'redirecting' ? 'Redirecting to checkout…' : 'Checkout'}
+      {status === 'redirecting' ? 'Checking out…' : 'Checkout'}
     </button>
   );
 }

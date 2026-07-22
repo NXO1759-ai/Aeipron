@@ -36,7 +36,9 @@ export function SmoothDisclosure({ summary, children }: SmoothDisclosureProps) {
         aria-expanded={open}
         aria-controls={bodyId}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full cursor-pointer items-center justify-between text-left text-sm font-bold uppercase tracking-widest transition-colors hover:text-accent-energy"
+        className={`flex w-full cursor-pointer items-center justify-between text-left text-sm font-bold uppercase tracking-widest transition-colors hover:text-accent-energy ${
+          open ? 'text-accent-energy' : ''
+        }`}
       >
         {summary}
         <span

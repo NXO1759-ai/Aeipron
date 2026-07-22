@@ -25,8 +25,8 @@ export default async function ShopPage() {
     <div className="min-h-screen bg-apeiron-black text-apeiron-ivory pb-24">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
-        {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-end mb-16 border-b border-ui-concrete/20 pb-8 pt-8">
+        {/* Header — right-aligned on all viewports (brand direction). */}
+        <div className="flex flex-col md:flex-row justify-end items-end mb-16 border-b border-ui-concrete/20 pb-8 pt-8 text-right">
           <div>
             <h1 className="font-inter text-4xl md:text-5xl font-medium uppercase tracking-tighter mb-4">
               Shop
@@ -57,7 +57,7 @@ export default async function ShopPage() {
             No products available yet.
           </p>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-12 mb-16">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-10 sm:gap-x-6 sm:gap-y-12 mb-16">
             {products.map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}
