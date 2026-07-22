@@ -16,9 +16,11 @@
 // under Navidium's own product title ('Protected Checkout').
 //
 // Presentation mirrors the Navidium widget format: shield mark, "Shipping
-// insurance +$X" label, and the coverage copy. When NAVIDIUM_API_URL is
-// unset the action returns null and this renders nothing — the feature is
-// invisible on stores without Navidium.
+// Insurance +$X" label, and the coverage copy. While a quote is in flight the
+// row renders in a loading state (price skeleton + disabled switch) so it
+// pulls out WITH the drawer instead of popping in a beat later. When
+// NAVIDIUM_API_URL is unset the action returns null and this renders nothing —
+// the feature is invisible on stores without Navidium.
 // ---------------------------------------------------------------------------
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -57,6 +59,12 @@ function ShieldIcon() {
 export function ShippingProtection({ active }: { active: boolean }) {
   const { items, currencyCode, addItem, removeItem } = useCart();
   const [quote, setQuote] = useState<KeyedQuote | null>(null);
+  // null = we don't know yet whether this store has Navidium (no answer yet),
+  // true/false = first answer said so. While null/true and no live quote, the
+  // row renders in a LOADING state (price skeleton + disabled switch) so it
+  // pulls out WITH the drawer instead of popping in a beat later; once an
+  // answer comes back empty (store without Navidium) the row disappears.
+  const [available, setAvailable] = useState<boolean | null>(null);
   const swappingRef = useRef(false);
 
   const merchandiseLines = useMemo(() => merchandiseLinesOf(items), [items]);
@@ -82,7 +90,9 @@ export function ShippingProtection({ active }: { active: boolean }) {
         quantity: l.quantity,
       })),
     }).then((fresh) => {
-      if (!cancelled && fresh) setQuote({ key: quoteKey, variantId: fresh.variantId, price: fresh.price });
+      if (cancelled) return;
+      setAvailable(fresh !== null);
+      if (fresh) setQuote({ key: quoteKey, variantId: fresh.variantId, price: fresh.price });
     });
     return () => {
       cancelled = true;
@@ -115,9 +125,12 @@ export function ShippingProtection({ active }: { active: boolean }) {
     })();
   }, [liveQuote, protectionLine, addItem, removeItem, currencyCode]);
 
-  if (!liveQuote) return null;
+  if (available === false) return null; // store without Navidium — invisible
+
+  const loading = !liveQuote;
 
   const handleToggle = (checked: boolean) => {
+    if (!liveQuote) return;
     if (checked) {
       addItem({
         merchandiseId: liveQuote.variantId,
@@ -140,8 +153,15 @@ export function ShippingProtection({ active }: { active: boolean }) {
             <ShieldIcon />
           </span>
           <p className="text-sm font-bold text-primary-cream">
-            Shipping insurance{' '}
-            <span className="font-mono">+{formatCurrency(liveQuote.price, currencyCode)}</span>
+            Shipping Insurance{' '}
+            {liveQuote ? (
+              <span className="font-mono">+{formatCurrency(liveQuote.price, currencyCode)}</span>
+            ) : (
+              <span
+                aria-hidden="true"
+                className="inline-block h-4 w-12 animate-pulse rounded-sm bg-ui-concrete/30 align-middle"
+              />
+            )}
           </p>
         </div>
         <button
@@ -149,10 +169,11 @@ export function ShippingProtection({ active }: { active: boolean }) {
           role="switch"
           aria-checked={enabled}
           aria-label="Toggle shipping protection"
+          disabled={loading}
           onClick={() => handleToggle(!enabled)}
           className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
             enabled ? 'bg-primary-cream' : 'bg-ui-concrete/40'
-          }`}
+          } ${loading ? 'opacity-60' : ''}`}
         >
           <span
             aria-hidden="true"
