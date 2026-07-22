@@ -7,12 +7,13 @@ import { FooterLegal } from './FooterLegal';
 // ---------------------------------------------------------------------------
 // Footer — redesigned site-wide footer (reference image).
 //
-// Four columns on desktop:
+// Three columns on desktop:
 //   1. Brand block — Apeiron text lockup (matches Header), Japanese tagline,
-//      "Beyond the trend." line, divider, shipping-from address, social icons.
-//   2. Shop links — Collection, Our Story (with arrows).
-//   3. Support links — Help Center, Contact Us (with arrows).
-//   4. Join the List — newsletter copy + NewsletterForm email capture.
+//      "Beyond the trend." line.
+//   2. Footer links — Shop, Our Story, Help Center, Contact Us (with arrows)
+//      in ONE flat list — no group labels, everything on the same level.
+//   3. Join the List — newsletter copy + NewsletterForm email capture, then a
+//      divider and the shipping-from address + social icons BELOW it.
 //
 // Bottom bar: copyright (left), legal links (right) — Privacy Policy, Refund
 // Policy and Terms of Service open as pop-up dialogs (FooterLegal); the store
@@ -25,12 +26,9 @@ import { FooterLegal } from './FooterLegal';
 // render the footer as a Server Component passed via children, not imported here.
 // ---------------------------------------------------------------------------
 
-const shopLinks = [
+const footerLinks = [
   { label: 'Shop', href: '/shop' },
   { label: 'Our Story', href: '/story' },
-];
-
-const supportLinks = [
   { label: 'Help Center', href: '/help' },
   { label: 'Contact Us', href: '/contact' },
 ];
@@ -92,7 +90,7 @@ export function Footer() {
   return (
     <footer className="bg-apeiron-black text-apeiron-ivory border-t border-ui-concrete/20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 lg:gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12 lg:gap-8">
           {/* Brand block */}
           <div className="flex flex-col gap-4">
             <div className="flex flex-col items-start">
@@ -109,6 +107,26 @@ export function Footer() {
             <p className="text-ui-concrete text-xs leading-relaxed max-w-xs">
               Beyond the trend.
             </p>
+          </div>
+
+          {/* Footer links — one flat list, no group labels */}
+          <nav aria-label="Footer" className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3">
+              {footerLinks.map((link) => (
+                <ArrowLink key={link.href} href={link.href}>{link.label}</ArrowLink>
+              ))}
+            </div>
+          </nav>
+
+          {/* Join the List + shipping/socials below it */}
+          <div className="flex flex-col gap-4">
+            <h2 className="text-ui-concrete uppercase tracking-widest text-xs font-bold">
+              Join the List
+            </h2>
+            <p className="text-ui-concrete text-xs leading-relaxed">
+              Early access to new drops and studio collaborations.
+            </p>
+            <NewsletterForm />
 
             <hr className="border-ui-concrete/20 w-full my-0" />
 
@@ -134,41 +152,6 @@ export function Footer() {
                 ))}
               </ul>
             </div>
-          </div>
-
-          {/* Shop */}
-          <nav aria-label="Shop" className="flex flex-col gap-4">
-            <h2 className="text-ui-concrete uppercase tracking-widest text-xs font-bold">
-              Shop
-            </h2>
-            <div className="flex flex-col gap-3">
-              {shopLinks.map((link) => (
-                <ArrowLink key={link.href} href={link.href}>{link.label}</ArrowLink>
-              ))}
-            </div>
-          </nav>
-
-          {/* Support */}
-          <nav aria-label="Support" className="flex flex-col gap-4">
-            <h2 className="text-ui-concrete uppercase tracking-widest text-xs font-bold">
-              Support
-            </h2>
-            <div className="flex flex-col gap-3">
-              {supportLinks.map((link) => (
-                <ArrowLink key={link.href} href={link.href}>{link.label}</ArrowLink>
-              ))}
-            </div>
-          </nav>
-
-          {/* Join the List */}
-          <div className="flex flex-col gap-4">
-            <h2 className="text-ui-concrete uppercase tracking-widest text-xs font-bold">
-              Join the List
-            </h2>
-            <p className="text-ui-concrete text-xs leading-relaxed">
-              Early access to new drops and studio collaborations.
-            </p>
-            <NewsletterForm />
           </div>
         </div>
 

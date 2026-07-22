@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import { useCart } from '@/store/use-cart';
 import { resolveSelectedVariant, resolvePreviewVariant, variantDescriptor } from '@/lib/product';
@@ -64,6 +64,28 @@ export function ProductExperience({ product, reviewData }: { product: Product; r
       ? product.images[manualIndex] ?? ''
       : previewVariant?.image || product.images[0] || '';
 
+  // Mobile gallery: the main image is swipeable left/right (the thumbnail
+  // strip is desktop-only). A horizontal swipe cycles through product.images
+  // via manualIndex; vertical pans keep scrolling the page (touch-pan-y on
+  // the frame). Swiping sets manualIndex, so a later option selection resets
+  // to the variant image — the same rule as a thumbnail tap.
+  const activeImageIndex =
+    manualIndex ?? Math.max(0, product.images.indexOf(activeImage));
+  const touchStartX = useRef<number | null>(null);
+
+  const handleGalleryTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleGalleryTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (touchStartX.current === null || product.images.length < 2) return;
+    const deltaX = e.changedTouches[0].clientX - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(deltaX) < 40) return; // too small to be a swipe
+    const direction = deltaX < 0 ? 1 : -1; // swipe left → next, right → previous
+    setManualIndex((activeImageIndex + direction + product.images.length) % product.images.length);
+  };
+
   const handleAddToCart = async () => {
     if (!selectedVariant) return;
     // Variant descriptor shown in the cart: built from the RESOLVED variant's
@@ -109,7 +131,11 @@ export function ProductExperience({ product, reviewData }: { product: Product; r
         <div className="relative w-full">
           <div className="lg:sticky lg:top-24 flex flex-col-reverse lg:flex-row-reverse gap-3 lg:gap-4 px-4 lg:px-8 pb-4 lg:pb-0 h-[60vh] lg:h-[calc(100vh-6rem)]">
             {/* Main image — follows the selected variant */}
-            <div className="relative flex-1 min-h-[40vh] lg:min-h-0 aspect-[3/4] lg:aspect-auto bg-ui-concrete/10">
+            <div
+              className="relative flex-1 min-h-[40vh] lg:min-h-0 aspect-[3/4] lg:aspect-auto bg-ui-concrete/10 touch-pan-y"
+              onTouchStart={handleGalleryTouchStart}
+              onTouchEnd={handleGalleryTouchEnd}
+            >
               {activeImage ? (
                 <Image
                   key={activeImage}
@@ -127,9 +153,9 @@ export function ProductExperience({ product, reviewData }: { product: Product; r
               )}
             </div>
 
-            {/* Thumbnails — browse manually; variant selection resets to the variant image */}
+            {/* Thumbnails — desktop only; variant selection resets to the variant image */}
             {product.images.length > 1 ? (
-              <div className="flex lg:flex-col gap-2 overflow-x-auto lg:overflow-y-auto lg:overflow-x-hidden hide-scrollbar lg:w-20 shrink-0">
+              <div className="hidden lg:flex lg:flex-col gap-2 overflow-x-auto lg:overflow-y-auto lg:overflow-x-hidden hide-scrollbar lg:w-20 shrink-0">
                 {product.images.map((src, idx) => {
                   const isActive = src === activeImage;
                   return (
