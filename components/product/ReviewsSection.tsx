@@ -6,29 +6,26 @@ import { useDialogExit } from '@/hooks/use-dialog-exit';
 import type { ProductReview, ProductReviewData } from '@/lib/judge-me';
 
 // ---------------------------------------------------------------------------
-// ReviewsSection — the "Reviews" disclosure body on the PDP.
+// ReviewsSection — the Reviews disclosure body: 1. FitScale (always) 2. Thumbs
+// 3. Details (pop-up with all reviews).
 //
-//   ┌──────────────────────────────┐
-//   │  ★★★★★ 4.0 · 3 reviews       │  ← summary row (stars + average + count)
-//   │  Fit scale                   │  ← always shown (metafield-driven)
-//   │  [ Details ]                 │  ← opens the full pop-up (with excerpt)
-//   └──────────────────────────────┘
-//
-// The pop-up lists every review with its own star row, date, title, body and
-// author. When the store has no reviews yet (or Judge.me is unreachable), the
-// section degrades to the fit scale + an honest empty state — no fabricated
-// stars, no fake count.
+// Data posture (lib/judge-me.ts): the parent page fetches reviews SERVER-SIDE
+// and passes them down; any fetch/parse failure resolves to the EMPTY_DATA
+// state — never a rendered error, never a broken section. When there are no
+// reviews yet the section shows the fit scale (metafield-driven, always
+// available) and an honest empty state — no fabricated social proof.
 // ---------------------------------------------------------------------------
 
-function StarRow({ rating, label }: { rating: number; label: string }) {
-  // Filled stars are rounded so a 4.5 average renders 5 stars with the last
-  // one fully filled — the standard e-commerce convention (Judge.me rounds
-  // half stars up in its own widgets).
-  const filled = Math.round(rating);
+/** Star display: filled cream stars for the rating, concrete for the rest. */
+function Stars({ rating }: { rating: number }) {
   return (
-    <div role="img" aria-label={label} className="flex gap-0.5 text-sm text-primary-cream">
+    <div role="img" aria-label={`${rating} out of 5 stars`} className="flex gap-0.5 text-sm">
       {[1, 2, 3, 4, 5].map((star) => (
-        <span key={star} aria-hidden="true" className={star <= filled ? '' : 'text-ui-concrete/40'}>
+        <span
+          key={star}
+          aria-hidden="true"
+          className={star <= rating ? 'text-primary-cream' : 'text-ui-concrete/40'}
+        >
           ★
         </span>
       ))}
@@ -36,30 +33,29 @@ function StarRow({ rating, label }: { rating: number; label: string }) {
   );
 }
 
-function formatDate(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-}
-
 function ReviewCard({ review }: { review: ProductReview }) {
   return (
-    <article className="border border-ui-concrete/20 p-4">
-      <div className="flex items-center justify-between gap-4">
-        <StarRow rating={review.rating} label={`${review.rating} out of 5 stars`} />
+    <article className="border-t border-ui-concrete/20 pt-4 first:border-t-0 first:pt-0">
+      <div className="flex items-center justify-between gap-3">
+        <Stars rating={review.rating} />
         <time className="text-xs text-ui-concrete" dateTime={review.createdAt}>
-          {formatDate(review.createdAt)}
+          {new Date(review.createdAt).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+          })}
         </time>
       </div>
-      <h4 className="mt-2 text-sm font-bold uppercase tracking-widest text-primary-cream">
-        {review.title}
-      </h4>
-      <p className="mt-2 text-sm leading-relaxed text-ui-concrete">{review.body}</p>
-      <p className="mt-3 text-xs uppercase tracking-widest text-ui-concrete">{review.author}</p>
+      {review.title ? (
+        <h4 className="mt-2 text-sm font-bold uppercase tracking-widest">{review.title}</h4>
+      ) : null}
+      <p className="mt-1 text-sm leading-relaxed text-ui-concrete">{review.body}</p>
+      <p className="mt-2 text-xs uppercase tracking-widest text-ui-concrete">{review.author}</p>
     </article>
   );
 }
 
+/** The full-reviews pop-up: all reviews in a scrollable dialog. */
 function ReviewsModal({ data, onClose }: { data: ProductReviewData; onClose: () => void }) {
   // Esc/backdrop/× all route through requestClose so the pop-up plays its
   // outro (backdrop fade + panel drift) before unmounting.
@@ -95,10 +91,13 @@ function ReviewsModal({ data, onClose }: { data: ProductReviewData; onClose: () 
         }`}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center justify-between gap-4">
-          <h3 className="text-sm font-bold uppercase tracking-widest text-primary-cream">
-            Reviews
-          </h3>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-bold uppercase tracking-widest">Reviews</h3>
+            <p className="mt-1 text-xs uppercase tracking-widest text-ui-concrete">
+              {data.summary.average} average · {data.summary.total} {data.summary.total === 1 ? 'review' : 'reviews'}
+            </p>
+          </div>
           <button
             type="button"
             onClick={requestClose}
@@ -122,38 +121,38 @@ function ReviewsModal({ data, onClose }: { data: ProductReviewData; onClose: () 
 export function ReviewsSection({ fit, data }: { fit: number; data: ProductReviewData }) {
   const [open, setOpen] = useState(false);
   const { summary, reviews } = data;
-  const positive = summary.byRating[5] + summary.byRating[4];
 
   return (
-    <div className="space-y-4">
-      {/* Summary row — only when there is at least one published review. */}
+    <div className="space-y-4 text-sm leading-relaxed text-ui-concrete">
+      {/* 1. Fit scale — always rendered (metafield-driven; lib/fit.ts). */}
+      <FitScale fit={fit} />
+
+      {/* 2. Thumbs + 3. Details — only when reviews exist; otherwise an honest
+          empty state (no fabricated stars or counts). */}
       {summary.total > 0 ? (
-        <div className="flex items-center gap-3">
-          <StarRow rating={summary.average} label={`${summary.average} out of 5 stars`} />
-          <span className="text-xs uppercase tracking-widest text-ui-concrete">
-            {summary.average} · {summary.total} {summary.total === 1 ? 'review' : 'reviews'}
-          </span>
-        </div>
-      ) : (
-        <p className="text-xs uppercase tracking-widest text-ui-concrete">No reviews yet</p>
-      )}
-
-      <FitScale fit={fit} positiveReviews={positive} />
-
-      {reviews.length > 0 ? (
-        <>
-          <p className="text-sm leading-relaxed text-ui-concrete line-clamp-2">
-            “{reviews[0].body}” — {reviews[0].author}
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <Stars rating={Math.round(summary.average)} />
+            <span className="text-xs uppercase tracking-widest text-ui-concrete">
+              {summary.average} · {summary.total} {summary.total === 1 ? 'review' : 'reviews'}
+            </span>
+          </div>
+          <p className="text-xs uppercase tracking-widest text-ui-concrete">
+            {summary.thumbsUp} of {summary.thumbsUp + summary.thumbsDown} recommend this
           </p>
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="cursor-pointer text-xs uppercase tracking-widest text-primary-cream underline underline-offset-4 transition-colors hover:text-accent-energy"
+            className="cursor-pointer text-xs font-bold uppercase tracking-widest text-primary-cream underline underline-offset-4 transition-colors hover:text-accent-energy"
           >
             Details
           </button>
-        </>
-      ) : null}
+        </div>
+      ) : (
+        <p className="text-xs uppercase tracking-widest text-ui-concrete">
+          No reviews yet — be the first after checkout.
+        </p>
+      )}
 
       {open ? <ReviewsModal data={data} onClose={() => setOpen(false)} /> : null}
     </div>
