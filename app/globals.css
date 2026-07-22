@@ -133,3 +133,46 @@
     transition: none;
   }
 }
+
+/* ------------------------------------------------------------------------- */
+/* Dialog motion — shared enter/exit choreography for the site's pop-ups      */
+/* (Reviews details, legal policy dialogs). Backdrop fades, panel drifts up   */
+/* 8px; both run on opacity/transform only (compositor), and the exit class   */
+/* is applied by use-dialog-exit for the outro before unmount. Reduced        */
+/* motion disables the animation entirely.                                    */
+/* ------------------------------------------------------------------------- */
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes modal-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.dialog-backdrop-in { animation: fade-in 200ms ease-out; }
+.dialog-backdrop-out { animation: fade-out 160ms ease-in forwards; }
+.dialog-panel-in { animation: modal-in 200ms ease-out; }
+.dialog-panel-out { animation: modal-out 160ms ease-in forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog-backdrop-in,
+  .dialog-backdrop-out,
+  .dialog-panel-in,
+  .dialog-panel-out {
+    animation: none;
+  }
+}
