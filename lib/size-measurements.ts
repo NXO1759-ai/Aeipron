@@ -6,16 +6,18 @@
 // chest and length, each step down subtracts it. The model is therefore an
 // ANCHOR size with known measurements plus per-step increments:
 //
-//   { "unit": "in", "anchor": "L", "chest": 23, "length": 46,
-//     "chestStep": 5, "lengthStep": 3 }
+//   { "unit": "in", "anchor": "M", "chest": 23, "length": 46,
+//     "chestStep": 5, "lengthStep": 5 }
 //
-//   → M = 18 / 43, L = 23 / 46, XL = 28 / 49 …
+//   → S = 18 / 41, M = 23 / 46, L = 28 / 51 …
 //
-// The data comes from the product's `custom.size_measurements` metafield
-// (type: json), so EVERY product page can carry different numbers, units and
-// size ranges — nothing is hardcoded per product. Anything unparseable or
-// incomplete resolves to `undefined` (the readout simply doesn't render) —
-// a bad metafield value can never break the product page.
+// Every Size group ALWAYS renders the readout: when the product carries a
+// `custom.size_measurements` metafield (type: json) it drives the numbers —
+// so every product page can carry different values, units and anchors —
+// and when it doesn't, resolveSizeMeasurements() falls back to the house
+// default above (23 IN / 46 IN at the middle size, ±5 per step). Anything
+// unparseable or incomplete in the metafield resolves to `undefined` and
+// also falls back — a bad metafield value can never break the product page.
 //
 // Pure module (no React, no DOM): fully unit-testable in the node env.
 // ---------------------------------------------------------------------------
@@ -43,7 +45,23 @@ export interface SizeMeasurement {
 }
 
 const DEFAULT_CHEST_STEP = 5;
-const DEFAULT_LENGTH_STEP = 3;
+const DEFAULT_LENGTH_STEP = 5;
+
+/**
+ * The house default grading, used whenever a product has no (valid)
+ * `custom.size_measurements` metafield: 23 IN chest / 46 IN length at the
+ * anchor size, ±5 per size step on both. The anchor is size M — "the medium
+ * being the middle point" — and resolveSizeMeasurements() re-centres it on
+ * the middle of the actual size list when a product has no M.
+ */
+export const DEFAULT_SIZE_MEASUREMENTS: SizeMeasurements = {
+  unit: 'in',
+  anchorSize: 'M',
+  chest: 23,
+  length: 46,
+  chestStep: DEFAULT_CHEST_STEP,
+  lengthStep: DEFAULT_LENGTH_STEP,
+};
 
 function toNumber(raw: unknown): number | null {
   if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
@@ -65,7 +83,7 @@ function toUnit(raw: unknown): 'in' | 'cm' {
  *
  * Accepted keys: `anchor` (or `anchorSize`), `chest`, `length` are required;
  * `unit` ('in' | 'cm', default 'in'), `chestStep` (default 5) and
- * `lengthStep` (default 3) are optional. Numbers may be JSON numbers or
+ * `lengthStep` (default 5) are optional. Numbers may be JSON numbers or
  * numeric strings, so the merchant can paste whichever is convenient.
  */
 export function parseSizeMeasurements(json: string | undefined | null): SizeMeasurements | undefined {
@@ -134,4 +152,25 @@ export function measurementsForSizes(
   sizes: readonly string[],
 ): (SizeMeasurement | undefined)[] {
   return sizes.map((size) => measurementForSize(config, sizes, size));
+}
+
+/**
+ * The config the PDP should render with: the product's own metafield config
+ * when present, otherwise the house default (DEFAULT_SIZE_MEASUREMENTS).
+ * For the fallback, the anchor is size M when the size list has one; when it
+ * doesn't (e.g. S–XL only), the anchor re-centres on the middle of the
+ * actual list so the grading still fans out from the middle size. Returns
+ * `undefined` only when there are no sizes at all.
+ */
+export function resolveSizeMeasurements(
+  config: SizeMeasurements | undefined,
+  sizes: readonly string[],
+): SizeMeasurements | undefined {
+  if (config) return config;
+  if (sizes.length === 0) return undefined;
+  const lowered = sizes.map((s) => s.toLowerCase());
+  const anchor = lowered.includes(DEFAULT_SIZE_MEASUREMENTS.anchorSize.toLowerCase())
+    ? DEFAULT_SIZE_MEASUREMENTS.anchorSize
+    : sizes[Math.floor((sizes.length - 1) / 2)];
+  return { ...DEFAULT_SIZE_MEASUREMENTS, anchorSize: anchor };
 }

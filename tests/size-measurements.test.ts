@@ -1,17 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import {
+  DEFAULT_SIZE_MEASUREMENTS,
   isSizeGroup,
   measurementForSize,
   measurementsForSizes,
   parseSizeMeasurements,
+  resolveSizeMeasurements,
 } from '@/lib/size-measurements';
 
 // ---------------------------------------------------------------------------
 // Size measurements (lib/size-measurements) — the per-size chest/length
 // readout under the size selector. The contract under test: the metafield
 // JSON parses tolerantly (anything incomplete/invalid → undefined, never a
-// broken PDP), and grading resolves every size from the anchor by the
-// per-step increments — up adds, down subtracts.
+// broken PDP), grading resolves every size from the anchor by the per-step
+// increments — up adds, down subtracts — and the readout ALWAYS has a config
+// to render with: the product's own metafield when present, otherwise the
+// house default (23 IN / 46 IN at the middle size, ±5 per step).
 // ---------------------------------------------------------------------------
 
 const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
@@ -24,7 +28,7 @@ describe('parseSizeMeasurements', () => {
       chest: 23,
       length: 46,
       chestStep: 5,
-      lengthStep: 3,
+      lengthStep: 5,
     });
   });
 
@@ -74,11 +78,11 @@ describe('measurementForSize / measurementsForSizes', () => {
     expect(measurementForSize(config, SIZES, 'L')).toEqual({ chest: 23, length: 46 });
   });
 
-  it('adds the increments going up and subtracts them going down', () => {
-    expect(measurementForSize(config, SIZES, 'XL')).toEqual({ chest: 28, length: 49 });
-    expect(measurementForSize(config, SIZES, 'XXL')).toEqual({ chest: 33, length: 52 });
-    expect(measurementForSize(config, SIZES, 'M')).toEqual({ chest: 18, length: 43 });
-    expect(measurementForSize(config, SIZES, 'XS')).toEqual({ chest: 8, length: 37 });
+  it('adds 5/5 going up and subtracts 5/5 going down', () => {
+    expect(measurementForSize(config, SIZES, 'XL')).toEqual({ chest: 28, length: 51 });
+    expect(measurementForSize(config, SIZES, 'XXL')).toEqual({ chest: 33, length: 56 });
+    expect(measurementForSize(config, SIZES, 'M')).toEqual({ chest: 18, length: 41 });
+    expect(measurementForSize(config, SIZES, 'XS')).toEqual({ chest: 8, length: 31 });
   });
 
   it('matches sizes and the anchor case-insensitively', () => {
@@ -101,10 +105,44 @@ describe('measurementForSize / measurementsForSizes', () => {
 
   it('maps every size, aligned with the input list', () => {
     expect(measurementsForSizes(config, ['M', 'L', 'XL'])).toEqual([
-      { chest: 18, length: 43 },
+      { chest: 18, length: 41 },
       { chest: 23, length: 46 },
-      { chest: 28, length: 49 },
+      { chest: 28, length: 51 },
     ]);
+  });
+});
+
+describe('resolveSizeMeasurements (metafield or house default)', () => {
+  it('passes a product metafield config through untouched', () => {
+    const own = parseSizeMeasurements(
+      '{"anchor": "L", "chest": 61, "length": 72, "unit": "cm", "chestStep": 2, "lengthStep": 2}',
+    )!;
+    expect(resolveSizeMeasurements(own, SIZES)).toBe(own);
+  });
+
+  it('falls back to the house default anchored on M', () => {
+    const resolved = resolveSizeMeasurements(undefined, SIZES)!;
+    expect(resolved).toEqual({ ...DEFAULT_SIZE_MEASUREMENTS, anchorSize: 'M' });
+    // 23 IN / 46 IN at M — "the medium being the middle point" — ±5 per step.
+    expect(measurementsForSizes(resolved, SIZES)).toEqual([
+      { chest: 13, length: 36 }, // XS
+      { chest: 18, length: 41 }, // S
+      { chest: 23, length: 46 }, // M
+      { chest: 28, length: 51 }, // L
+      { chest: 33, length: 56 }, // XL
+      { chest: 38, length: 61 }, // XXL
+    ]);
+  });
+
+  it('re-centres the fallback anchor on the middle size when there is no M', () => {
+    const resolved = resolveSizeMeasurements(undefined, ['S', 'L', 'XL'])!;
+    expect(resolved.anchorSize).toBe('L');
+    expect(measurementForSize(resolved, ['S', 'L', 'XL'], 'L')).toEqual({ chest: 23, length: 46 });
+    expect(measurementForSize(resolved, ['S', 'L', 'XL'], 'S')).toEqual({ chest: 18, length: 41 });
+  });
+
+  it('returns undefined only when there are no sizes at all', () => {
+    expect(resolveSizeMeasurements(undefined, [])).toBeUndefined();
   });
 });
 
