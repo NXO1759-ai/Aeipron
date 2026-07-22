@@ -1,52 +1,28 @@
 // ---------------------------------------------------------------------------
-// Shopify Storefront API GraphQL operation strings.
+// GraphQL queries + fragments for the Shopify Storefront API.
 //
-// All field selections are verified against the Storefront API 2025-07 docs.
-// See docs/SHOPIFY_API.md §4 (operations table) and §4.1 (deprecated fields).
-//
-// DO NOT add deprecated fields to these queries:
-//   - priceV2 / compareAtPriceV2 → use price / compareAtPrice
-//   - src / originalSrc / transformedSrc → use url
-//   - productByHandle → use product(handle:)
-//   - estimatedCost / discountAllocations → use cost / discountApplications
-//
-// This file is server-only: `import 'server-only'` makes any client import
-// fail at build time (the default export is a throwing stub outside Next's RSC
-// compiler). Do not import it from a 'use client' component.
+// Every query is a plain string constant — no gql tag, no codegen. Field
+// selection lives here (not at call sites) so a Shopify API version bump or a
+// new field requirement changes ONE file. Response types: lib/shopify/types.ts.
 // ---------------------------------------------------------------------------
 
-import 'server-only';
-
-/**
- * Fields shared by every product query. Used as a GraphQL fragment so the
- * list and detail queries never drift out of sync on field selection. If
- * Shopify renames a field on an API version bump, this is the one place to
- * fix it — every consumer updates automatically.
- *
- * Selects:
- *   id            — Shopify GID (not used for URLs; the adapter maps handle → Product.id)
- *   handle        — SEO-friendly slug used in the /product/[slug] route
- *   title         — product display name
- *   featuredImage — primary image for collection cards
- *   variants      — size/option matrix with availability + pricing + image
- *   priceRange    — min/max variant prices for display
- *
- * Deliberately does NOT select:
- *   description       — selected per-query (list uses truncateAt, detail uses full)
- *   quantityAvailable — token-gated, returns a number; we use availableForSale (boolean) instead
- *   metafields        — not needed for v1; add per-query if required later
- *   descriptionHtml   — the prototype renders plain text, not HTML
- */
-const PRODUCT_FRAGMENT = `#graphql
+// Shared product fields, used by BOTH the collection query (product cards) and
+// the product detail query. Cards need: handle/title for the link, priceRange
+// for the price line, featuredImage for the card image, and variants for the
+// in-stock check. The detail page re-uses the fragment and selects its extras
+// (images connection, options connection with swatches, rich-text metafields)
+// on top — one source of truth for the shared shape.
+export const PRODUCT_FRAGMENT = /* GraphQL */ `
   fragment ProductFields on Product {
     id
     handle
     title
+    description
     featuredImage {
       url
       altText
     }
-    variants(first: 50) {
+    variants(first: 100) {
       nodes {
         id
         availableForSale
@@ -58,9 +34,6 @@ const PRODUCT_FRAGMENT = `#graphql
           amount
           currencyCode
         }
-        # Variant's own image (nullable). Drives the product-gallery image
-        # switch: when a buyer selects a variant, the gallery shows this image,
-        # falling back to the product's featuredImage when null.
         image {
           url
           altText
@@ -80,31 +53,23 @@ const PRODUCT_FRAGMENT = `#graphql
   }
 `;
 
-/**
- * Operation 1 — collections index (category cards).
- *
- * Fetches up to 50 collections. Each card needs a representative image; Shopify
- * Collection images are nullable, so we also pull the first product's
- * `featuredImage` as a fallback (the adapter picks `image ?? firstFeaturedImage`).
- * `description` is selected truncated for the card blurb.
- *
- * Named operation `CollectionList` for Shopify query tracking / deduplication.
- */
-export const COLLECTION_LIST_QUERY = `#graphql
-  query CollectionList {
-    collections(first: 50) {
+// 3.1 Collections list — one entry per collection (up to 24), each with its
+// first product's featuredImage as a card fallback.
+export const COLLECTION_LIST_QUERY = /* GraphQL */ `
+  ${PRODUCT_FRAGMENT}
+  query Collections {
+    collections(first: 24) {
       nodes {
         handle
         title
-        description(truncateAt: 200)
+        description
         image {
           url
+          altText
         }
         products(first: 1) {
           nodes {
-            featuredImage {
-              url
-            }
+            ...ProductFields
           }
         }
       }
@@ -112,20 +77,10 @@ export const COLLECTION_LIST_QUERY = `#graphql
   }
 `;
 
-/**
- * Operation 1b — products within a single collection (category detail page).
- *
- * Fetches a collection by its handle and expands its products via the shared
- * `ProductFields` fragment so the cards reuse the same adapter path as the
- * product detail page. `description(truncateAt: 200)` is selected per-product
- * for the card blurb (the fragment deliberately omits `description`).
- *
- * The `$handle` variable is typed `String!` and passed separately (not
- * interpolated) to prevent injection and enable Shopify-side deduplication.
- *
- * Named operation `CollectionByHandle` for Shopify query tracking.
- */
-export const COLLECTION_BY_HANDLE_QUERY = `#graphql
+// 3.2 Collection detail — the collection + its products (up to 24) for the
+// category page grid.
+export const COLLECTION_BY_HANDLE_QUERY = /* GraphQL */ `
+  ${PRODUCT_FRAGMENT}
   query CollectionByHandle($handle: String!) {
     collectionByHandle(handle: $handle) {
       handle
@@ -133,54 +88,35 @@ export const COLLECTION_BY_HANDLE_QUERY = `#graphql
       description
       image {
         url
+        altText
       }
-      products(first: 50) {
+      products(first: 24) {
         nodes {
           ...ProductFields
-          description(truncateAt: 200)
         }
       }
     }
   }
-  ${PRODUCT_FRAGMENT}
 `;
 
-/**
- * Operation 2 — product detail page.
- *
- * Fetches a single product by its handle (the SEO slug used in the URL).
- * Uses the same ProductFields fragment as the list query, plus the full
- * `description` (no truncation) and the `images` connection (up to 10) for
- * the gallery.
- *
- * The `$handle` variable is typed `String!` and passed separately (not
- * interpolated into the query string) to prevent injection and enable
- * Shopify-side query deduplication.
- *
- * Named operation `ProductByHandle` for Shopify query tracking.
- */
-export const PRODUCT_BY_HANDLE_QUERY = `#graphql
+// 3.3 Product detail — the full product by handle (URL slug). Selects the
+// images connection for the gallery, the options connection (with per-value
+// swatch data) for the color picker, and the rich-text metafields for the
+// disclosure sections, on top of the shared fragment.
+export const PRODUCT_BY_HANDLE_QUERY = /* GraphQL */ `
+  ${PRODUCT_FRAGMENT}
   query ProductByHandle($handle: String!) {
     product(handle: $handle) {
       ...ProductFields
-      description
       images(first: 10) {
         nodes {
           url
           altText
         }
       }
-      # Option groups with merchant-configured swatches (color hex + texture
-      # image). Selected on the DETAIL query only — collection cards (which use
-      # the shared ProductFields fragment) don't pay for it. swatch.image is a
-      # Media union; we resolve it to a MediaImage and select its inner
-      # image { url }. swatch.color is the Storefront Color scalar (a hex
-      # string). Both are nullable — the adapter threads only what's present and
-      # resolveSwatch (lib/color.ts) falls back to a name→hex color, so colors
-      # render even with zero Shopify Admin swatch setup.
-      options {
+      options(first: 10) {
         name
-        optionValues {
+        optionValues(first: 50) {
           name
           swatch {
             color
@@ -194,14 +130,9 @@ export const PRODUCT_BY_HANDLE_QUERY = `#graphql
           }
         }
       }
-      # Custom product metafields (Rich Text). These live in the 'custom'
-      # namespace and are read here — on the DETAIL query only — so collection
-      # cards (which use the shared ProductFields fragment) don't pay for them.
-      # The Storefront API returns a rich_text value as a JSON STRING (a tree
-      # of typed nodes), NOT HTML — the client renders it via components/RichText.
-      # A metafield reads back as null when the product doesn't have it set OR
-      # when its definition isn't 'exposed to the Storefront API' (an admin
-      # setting per definition); the UI treats null as 'section absent'.
+      # Rich-text metafields in the `custom` namespace — each is a `rich_text`
+      # JSON string rendered by components/RichText. Aliased because the
+      # metafield key is a single string.
       detailsFabrication: metafield(namespace: "custom", key: "details_fabrication") {
         value
       }
@@ -216,80 +147,53 @@ export const PRODUCT_BY_HANDLE_QUERY = `#graphql
       fitReview: metafield(namespace: "custom", key: "review") {
         value
       }
-    }
-  }
-  ${PRODUCT_FRAGMENT}
-`;
-
-/**
- * Operation 1c — all products (Shop page).
- *
- * Fetches every product in the store (up to the Storefront `first: 250` max)
- * for the `/shop` grid. Each card reuses the shared `ProductFields` fragment
- * so it shares the exact same adapter path as the collection + detail queries
- * (the card renders featuredImage → name → price range). `description` is
- * selected truncated inline because the fragment deliberately omits it and
- * `mapProduct` reads it with no fallback.
- *
- * Deliberately does NOT select `options`/`swatch` or the `custom` metafields —
- * those are PDP-only concerns (see PRODUCT_BY_HANDLE_QUERY). Keeps the shop
- * payload lean, mirroring the collection grid.
- *
- * Named operation `Products` for Shopify query tracking. Takes no variables.
- */
-export const PRODUCTS_QUERY = `#graphql
-  query Products {
-    products(first: 250) {
-      nodes {
-        ...ProductFields
-        description(truncateAt: 200)
+      # Garment size grading for the size selector's measurement readout (json
+      # metafield — e.g. {"unit": "in", "anchor": "L", "chest": 23, "length":
+      # 46, "chestStep": 5, "lengthStep": 3}; parsed by
+      # lib/size-measurements.ts). Detail only.
+      sizeMeasurements: metafield(namespace: "custom", key: "size_measurements") {
+        value
       }
     }
   }
+`;
+
+// 3.4 All products (Shop page grid) — the full catalog (up to 250, the
+// Storefront API max page size). Sorted by title for a stable grid; the shop
+// page re-sorts client-side where needed.
+export const PRODUCTS_QUERY = /* GraphQL */ `
   ${PRODUCT_FRAGMENT}
+  query Products {
+    products(first: 250, sortKey: TITLE) {
+      nodes {
+        ...ProductFields
+      }
+    }
+  }
 `;
 
 // ---------------------------------------------------------------------------
-// Shopify Cart API operations (Phase 2 — operations 5–9).
+// Cart queries + mutations (Phase 2 — operations 5–9).
 //
-// See docs/SHOPIFY_API.md §4 (operations table) and §6 (cart & checkout flow).
+// One shared fragment (CART_FIELDS) returns the full cart snapshot after
+// EVERY operation — cart queries AND mutations all return the same shape, so
+// the client always has a complete, current cart to cache. This is the
+// Shopify Cart API pattern: mutate → receive the whole cart back.
 //
-// Critical rules these queries enforce:
-//   - `merchandise` is a `Merchandise` UNION — you CANNOT query
-//     `merchandise { id }` (id lives on ProductVariant, not the union). Every
-//     cart op uses `merchandise { ... on ProductVariant { ... } }`.
-//   - `totalQuantity` is selected on every cart response (sum of all line
-//     quantities) — it feeds the bag badge, NOT `lines` count.
-//   - `checkoutUrl` is selected on every cart response — the redirect target
-//     for Shopify's hosted checkout.
-//   - `cost.totalAmountEstimated` is selected — the UI labels the figure
-//     "Estimated total" because shipping + final taxes are NOT included
-//     (computed at hosted checkout after the buyer enters an address).
-//   - No deprecated fields: `estimatedCost`, `discountAllocations`, `priceV2`,
-//     image `src`/`originalSrc`/`transformedSrc`.
-//
-// Variables are typed and passed separately (not interpolated) for injection
-// safety and Shopify-side query deduplication — same convention as the product
-// queries above. This file stays server-only (only imported by lib/cart-cookie
-// consumers / server actions, never by a 'use client' component).
+// Shape notes (see lib/shopify/types.ts for the full rationale):
+//   - lines use `edges` / `node` (edge-based connection, unlike Product.variants)
+//   - merchandise needs an inline fragment on ProductVariant (Merchandise union)
+//   - every operation includes userErrors (checked at the call site)
 // ---------------------------------------------------------------------------
 
-/**
- * Fields shared by every cart query/mutation response. Used as a GraphQL
- * fragment so the cart get + 4 mutations never drift on field selection. If
- * Shopify renames a cart field, this is the one place to fix it.
- *
- * `lines` uses `edges` / `node` (the Cart.lines connection is edge-based, unlike
- * Product.variants which is node-based). `merchandise` uses the mandatory
- * inline-fragment pattern on the `Merchandise` union.
- *
- * `lines(first: 250)` is the Storefront API max for the cart-line connection.
- * Cart-level totals (`totalQuantity`, `cost.subtotalAmount`, `cost.totalAmount`)
- * are always correct regardless of how many lines are returned; only the line
- * LIST is bounded. 250 distinct variant lines is far beyond any real apparel
- * cart — if wholesale/bulk carts ever need more, add `pageInfo` pagination.
- */
-const CART_FRAGMENT = `#graphql
+// Shared cart fields — the complete cart snapshot. `id` is included so the
+// client can pass it back to subsequent mutations (and to correlate the
+// persisted cart id cookie). `totalQuantity` drives the bag badge (sum of
+// line quantities, NOT lines.length). `checkoutUrl` is the hosted-checkout
+// redirect target. `deliveryGroups` is deliberately NOT selected here — the
+// plain cart get / line mutations don't need it (checkout selects it via
+// CART_WITH_DELIVERY_QUERY below).
+export const CART_FIELDS = /* GraphQL */ `
   fragment CartFields on Cart {
     id
     totalQuantity
@@ -305,7 +209,7 @@ const CART_FRAGMENT = `#graphql
       }
       totalAmountEstimated
     }
-    lines(first: 250) {
+    lines(first: 100) {
       edges {
         node {
           id
@@ -348,35 +252,22 @@ const CART_FRAGMENT = `#graphql
   }
 `;
 
-/**
- * Operation 5 — read a cart by id.
- *
- * The cart id (incl. the `?key=` secret) is passed as the `$id` variable by the
- * server action, read from the HTTP-only `apeiron-cart-id` cookie. The id is
- * opaque — never parse, split, or log it. `cart` may be null if the cart expired.
- *
- * Named operation `CartGet` for Shopify query tracking.
- */
-export const CART_GET_QUERY = `#graphql
-  query CartGet($id: ID!) {
-    cart(id: $id) {
+// 5. Get cart by id — the resume/rehydrate query. `cart(id:)` returns null
+// for an unknown/expired id; the call site treats null as "no cart yet".
+export const CART_GET_QUERY = /* GraphQL */ `
+  ${CART_FIELDS}
+  query CartGet($cartId: ID!) {
+    cart(id: $cartId) {
       ...CartFields
     }
   }
-  ${CART_FRAGMENT}
 `;
 
-/**
- * Operation 6 — create a new cart with one or more lines.
- *
- * Called on the first "Add to bag" when no cart id cookie exists yet. The
- * server action stores the returned `cart.id` (full, incl. `?key=`) in the
- * HTTP-only cookie. `input.lines[].merchandiseId` is the ProductVariant GID;
- * `quantity` is the line count. No price is ever sent — Shopify prices the line.
- *
- * Named operation `CartCreate` for Shopify query tracking.
- */
-export const CART_CREATE_MUTATION = `#graphql
+// 6. Create cart — optionally with initial lines. The Storefront API creates
+// an empty cart when `lines` is omitted; the id (+ ?key= secret) comes back
+// in the response and is persisted by the server action as the cart cookie.
+export const CART_CREATE_MUTATION = /* GraphQL */ `
+  ${CART_FIELDS}
   mutation CartCreate($input: CartInput!) {
     cartCreate(input: $input) {
       cart {
@@ -388,19 +279,11 @@ export const CART_CREATE_MUTATION = `#graphql
       }
     }
   }
-  ${CART_FRAGMENT}
 `;
 
-/**
- * Operation 7 — add lines to an existing cart.
- *
- * Called on "Add to bag" when a cart id cookie already exists. `cartId` is the
- * full opaque cart id from the cookie; `lines[].merchandiseId` is the variant
- * GID. No price is sent.
- *
- * Named operation `CartLinesAdd` for Shopify query tracking.
- */
-export const CART_LINES_ADD_MUTATION = `#graphql
+// 7. Add lines to an existing cart.
+export const CART_LINES_ADD_MUTATION = /* GraphQL */ `
+  ${CART_FIELDS}
   mutation CartLinesAdd($cartId: ID!, $lines: [CartLineInput!]!) {
     cartLinesAdd(cartId: $cartId, lines: $lines) {
       cart {
@@ -412,19 +295,12 @@ export const CART_LINES_ADD_MUTATION = `#graphql
       }
     }
   }
-  ${CART_FRAGMENT}
 `;
 
-/**
- * Operation 8 — update line quantities.
- *
- * `lines[].id` is the CART-LINE GID (NOT the variant GID) — the unique line
- * identity returned by the cart response and held as `CartLine.lineId`. The
- * server action routes `quantity <= 0` to cartLinesRemove instead of this.
- *
- * Named operation `CartLinesUpdate` for Shopify query tracking.
- */
-export const CART_LINES_UPDATE_MUTATION = `#graphql
+// 8. Update line quantities (quantity 0 removes the line, but the dedicated
+// remove mutation is preferred for clarity).
+export const CART_LINES_UPDATE_MUTATION = /* GraphQL */ `
+  ${CART_FIELDS}
   mutation CartLinesUpdate($cartId: ID!, $lines: [CartLineUpdateInput!]!) {
     cartLinesUpdate(cartId: $cartId, lines: $lines) {
       cart {
@@ -436,18 +312,11 @@ export const CART_LINES_UPDATE_MUTATION = `#graphql
       }
     }
   }
-  ${CART_FRAGMENT}
 `;
 
-/**
- * Operation 9 — remove lines by their cart-line GIDs.
- *
- * `lineIds` are CART-LINE GIDs (NOT variant GIDs). Called by the server action
- * for explicit removal and for quantity-to-zero.
- *
- * Named operation `CartLinesRemove` for Shopify query tracking.
- */
-export const CART_LINES_REMOVE_MUTATION = `#graphql
+// 9. Remove lines from the cart.
+export const CART_LINES_REMOVE_MUTATION = /* GraphQL */ `
+  ${CART_FIELDS}
   mutation CartLinesRemove($cartId: ID!, $lineIds: [ID!]!) {
     cartLinesRemove(cartId: $cartId, lineIds: $lineIds) {
       cart {
@@ -459,115 +328,86 @@ export const CART_LINES_REMOVE_MUTATION = `#graphql
       }
     }
   }
-  ${CART_FRAGMENT}
 `;
 
 // ---------------------------------------------------------------------------
-// Shopify Cart delivery + buyer-identity operations (Phase 4b — custom checkout).
+// Phase 4b — custom checkout queries + mutations.
 //
-// These power the custom /checkout page: set the buyer's email/phone/country,
-// set the shipping delivery address (selected: true triggers rate calc), and
-// select a shipping method — all BEFORE handing off to cart.checkoutUrl,
-// which then prefills Shopify's hosted checkout (card entry happens there).
+// The /checkout page needs three things the plain cart ops don't return:
+//   1. The deliveryGroups connection (available shipping methods + costs)
+//   2. Mutations to set buyer identity (email), the delivery address, and the
+//      selected delivery option
 //
-// Flat/static shipping rates are returned synchronously via
-// `cart.deliveryGroups.nodes[].deliveryOptions` — NO @defer / withCarrierRates
-// (carrier-calculated rates are out of scope for v1; they'd need @defer + a
-// streaming client + a qualifying plan).
+// DELIVERY_GROUP_FIELDS mirrors the SHOPIFY_API.md §8 selection; it is added
+// to the cart fragment for the checkout-facing operations only (CART_WITH_DELIVERY_QUERY
+// + the four mutations below), keeping the plain cart ops lean.
 //
-// Trust invariants (same as the line mutations):
-//   - Variables carry only contact/address fields, countryCode, zip,
-//     deliveryGroupId, deliveryOptionHandle. NO price is ever sent — Shopify
-//     prices every line and computes shipping/tax itself. (No provinceCode is
-//     sent — Shopify derives the subdivision from the postal code.)
-//   - `cartId` is the opaque cart id (incl. `?key=`) from the cookie, passed
-//     VERBATIM — never parsed/logged/returned.
-//   - `userErrors` are logged server-side; the client gets a generic message.
-//     These mutations ALSO return `warnings` (non-fatal, e.g. "address could
-//     not be validated") — logged server-side, never surfaced, never block.
-//
-// Deprecated fields avoided:
-//   - `deliveryAddressPreferences` on CartBuyerIdentityInput (deprecated since
-//     2025-01) — we set the address via cartDeliveryAddressesAdd/Update instead.
-//   - `estimatedCost` (Cart.estimatedCost), cart-level `discountAllocations`,
-//     `totalTaxAmount`, `totalDutyAmount`, `MailingAddressInput` — none used.
+// `warnings` is selected alongside `userErrors` on the Phase 4b mutations:
+// warnings are non-fatal (logged server-side, never surfaced); userErrors are
+// hard failures (thrown as generic messages — never leaked to the client).
 // ---------------------------------------------------------------------------
 
-/**
- * Delivery-group fields shared by the cart-with-delivery query and the Phase 4b
- * mutations. Selects the available `deliveryOptions` (shipping methods + their
- * `estimatedCost`) and the currently `selectedDeliveryOption`, on each delivery
- * group. v1 reads the PRIMARY group only (deliveryGroups.nodes[0]); multi-group
- * / split-shipment UI is out of scope.
- */
-const DELIVERY_GROUPS_FRAGMENT = `#graphql
-  fragment DeliveryGroupsFields on Cart {
-    deliveryGroups(first: 250) {
-      nodes {
-        id
-        selectedDeliveryOption {
-          handle
-          code
-          title
-          description
-          estimatedCost {
-            amount
-            currencyCode
-          }
-          deliveryMethodType
-        }
-        deliveryOptions {
-          handle
-          code
-          title
-          description
-          estimatedCost {
-            amount
-            currencyCode
-          }
-          deliveryMethodType
+// Shared delivery-group fields — the available shipping options + the
+// currently selected one, per group. v1 reads the primary (first) group only.
+export const DELIVERY_GROUP_FIELDS = /* GraphQL */ `
+  fragment DeliveryGroupFields on DeliveryGroup {
+    id
+    selectedDeliveryOption {
+      handle
+      code
+      title
+      description
+      estimatedCost {
+        amount
+        currencyCode
+      }
+      deliveryMethodType
+    }
+    deliveryOptions(first: 10) {
+      handle
+      code
+      title
+      description
+      estimatedCost {
+        amount
+        currencyCode
+      }
+      deliveryMethodType
+    }
+  }
+`;
+
+// Cart get WITH delivery groups — used by the checkout server actions so the
+// /checkout page gets the order summary + shipping choices in one round trip.
+export const CART_WITH_DELIVERY_QUERY = /* GraphQL */ `
+  ${CART_FIELDS}
+  ${DELIVERY_GROUP_FIELDS}
+  query CartWithDelivery($cartId: ID!) {
+    cart(id: $cartId) {
+      ...CartFields
+      deliveryGroups(first: 10) {
+        nodes {
+          ...DeliveryGroupFields
         }
       }
     }
   }
 `;
 
-/**
- * Operation 10 — read a cart by id WITH its delivery groups (shipping options).
- *
- * Used by the checkout server actions to (a) detect an existing selected
- * delivery address (so we update rather than accumulate on re-submit) and
- * (b) read the available delivery options after setting the address. Differs
- * from CART_GET_QUERY only by additionally selecting deliveryGroups.
- *
- * Named operation `CartWithDelivery` for Shopify query tracking.
- */
-export const CART_WITH_DELIVERY_QUERY = `#graphql
-  query CartWithDelivery($id: ID!) {
-    cart(id: $id) {
-      ...CartFields
-      ...DeliveryGroupsFields
-    }
-  }
-  ${CART_FRAGMENT}
-  ${DELIVERY_GROUPS_FRAGMENT}
-`;
-
-/**
- * Operation 11 — set the buyer's email, phone, and country (for market pricing).
- *
- * Sets ONLY the contact fields — the shipping ADDRESS is set separately via
- * CART_DELIVERY_ADDRESSES_ADD/UPDATE (deliveryAddressPreferences is deprecated).
- * `buyerIdentity` is passed as a typed CartBuyerIdentityInput variable.
- *
- * Named operation `CartBuyerIdentityUpdate` for Shopify query tracking.
- */
-export const CART_BUYER_IDENTITY_UPDATE_MUTATION = `#graphql
+// Set the buyer's email (buyer identity) on the cart. Required before the
+// delivery address so Shopify can validate + return shipping rates.
+export const CART_BUYER_IDENTITY_UPDATE_MUTATION = /* GraphQL */ `
+  ${CART_FIELDS}
+  ${DELIVERY_GROUP_FIELDS}
   mutation CartBuyerIdentityUpdate($cartId: ID!, $buyerIdentity: CartBuyerIdentityInput!) {
     cartBuyerIdentityUpdate(cartId: $cartId, buyerIdentity: $buyerIdentity) {
       cart {
         ...CartFields
-        ...DeliveryGroupsFields
+        deliveryGroups(first: 10) {
+          nodes {
+            ...DeliveryGroupFields
+          }
+        }
       }
       userErrors {
         field
@@ -579,27 +419,22 @@ export const CART_BUYER_IDENTITY_UPDATE_MUTATION = `#graphql
       }
     }
   }
-  ${CART_FRAGMENT}
-  ${DELIVERY_GROUPS_FRAGMENT}
 `;
 
-/**
- * Operation 12 — add a delivery (shipping) address to the cart.
- *
- * `addresses` is `[CartSelectableAddressInput!]!`; the action passes a single
- * entry with `selected: true` (which triggers rate calculation for that address)
- * and `address.deliveryAddress` (a CartDeliveryAddressInput — countryCode is a
- * code; no provinceCode is sent, Shopify derives the subdivision from zip).
- * Used when no delivery address exists yet.
- *
- * Named operation `CartDeliveryAddressesAdd` for Shopify query tracking.
- */
-export const CART_DELIVERY_ADDRESSES_ADD_MUTATION = `#graphql
-  mutation CartDeliveryAddressesAdd($cartId: ID!, $addresses: [CartSelectableAddressInput!]!) {
+// Add the delivery address to the cart. Triggers Shopify to compute the
+// available delivery options + their costs for that address.
+export const CART_DELIVERY_ADDRESSES_ADD_MUTATION = /* GraphQL */ `
+  ${CART_FIELDS}
+  ${DELIVERY_GROUP_FIELDS}
+  mutation CartDeliveryAddressesAdd($cartId: ID!, $addresses: [CartAddressInput!]!) {
     cartDeliveryAddressesAdd(cartId: $cartId, addresses: $addresses) {
       cart {
         ...CartFields
-        ...DeliveryGroupsFields
+        deliveryGroups(first: 10) {
+          nodes {
+            ...DeliveryGroupFields
+          }
+        }
       }
       userErrors {
         field
@@ -611,26 +446,21 @@ export const CART_DELIVERY_ADDRESSES_ADD_MUTATION = `#graphql
       }
     }
   }
-  ${CART_FRAGMENT}
-  ${DELIVERY_GROUPS_FRAGMENT}
 `;
 
-/**
- * Operation 13 — update an existing delivery address on the cart (by its id).
- *
- * Used when the buyer re-submits the address form after an address already
- * exists (idempotent: avoids accumulating duplicate addresses). `addresses` is
- * `[CartSelectableAddressUpdateInput!]!`; each entry needs the address `id`
- * (the CartSelectableAddress GID), `selected: true`, and the new address.
- *
- * Named operation `CartDeliveryAddressesUpdate` for Shopify query tracking.
- */
-export const CART_DELIVERY_ADDRESSES_UPDATE_MUTATION = `#graphql
-  mutation CartDeliveryAddressesUpdate($cartId: ID!, $addresses: [CartSelectableAddressUpdateInput!]!) {
+// Update the delivery address (the addressId addresses the existing address).
+export const CART_DELIVERY_ADDRESSES_UPDATE_MUTATION = /* GraphQL */ `
+  ${CART_FIELDS}
+  ${DELIVERY_GROUP_FIELDS}
+  mutation CartDeliveryAddressesUpdate($cartId: ID!, $addresses: [CartAddressUpdateInput!]!) {
     cartDeliveryAddressesUpdate(cartId: $cartId, addresses: $addresses) {
       cart {
         ...CartFields
-        ...DeliveryGroupsFields
+        deliveryGroups(first: 10) {
+          nodes {
+            ...DeliveryGroupFields
+          }
+        }
       }
       userErrors {
         field
@@ -642,27 +472,23 @@ export const CART_DELIVERY_ADDRESSES_UPDATE_MUTATION = `#graphql
       }
     }
   }
-  ${CART_FRAGMENT}
-  ${DELIVERY_GROUPS_FRAGMENT}
 `;
 
-/**
- * Operation 14 — select a shipping method (delivery option) on the cart.
- *
- * `selectedDeliveryOptions` is `[CartSelectedDeliveryOptionInput!]!`; each
- * entry pairs a `deliveryGroupId` with the chosen `deliveryOptionHandle` (the
- * `handle` from a CartDeliveryOption read off deliveryGroups). After this
- * mutation, the cart's `cost.totalAmount` reflects the selected shipping cost
- * (still an estimate — tax/duty computed at Shopify's hosted checkout).
- *
- * Named operation `CartSelectedDeliveryOptionsUpdate` for Shopify query tracking.
- */
-export const CART_SELECTED_DELIVERY_OPTIONS_UPDATE_MUTATION = `#graphql
+// Select a delivery option (shipping method). `deliveryOptionHandle` is the
+// opaque handle from the deliveryOptions list — the browser sends ONLY
+// handle + deliveryGroupId, never a price.
+export const CART_SELECTED_DELIVERY_OPTIONS_UPDATE_MUTATION = /* GraphQL */ `
+  ${CART_FIELDS}
+  ${DELIVERY_GROUP_FIELDS}
   mutation CartSelectedDeliveryOptionsUpdate($cartId: ID!, $selectedDeliveryOptions: [CartSelectedDeliveryOptionInput!]!) {
     cartSelectedDeliveryOptionsUpdate(cartId: $cartId, selectedDeliveryOptions: $selectedDeliveryOptions) {
       cart {
         ...CartFields
-        ...DeliveryGroupsFields
+        deliveryGroups(first: 10) {
+          nodes {
+            ...DeliveryGroupFields
+          }
+        }
       }
       userErrors {
         field
@@ -674,32 +500,18 @@ export const CART_SELECTED_DELIVERY_OPTIONS_UPDATE_MUTATION = `#graphql
       }
     }
   }
-  ${CART_FRAGMENT}
-  ${DELIVERY_GROUPS_FRAGMENT}
 `;
 
-/**
- * Operation 15 — read the Help Center Q&A entries.
- *
- * The merchant edits Help Center content in Shopify admin (Settings → Custom
- * data → Metaobjects) — one metaobject per accordion item, with fields:
- *   question (single_line_text) — the disclosure summary
- *   answer   (multi_line_text)  — the disclosure body (plain text, one
- *                                 paragraph per line)
- *   category (single_line_text) — the accordion group, e.g. "Orders"
- *   position (number_integer)   — OPTIONAL manual sort order (ascending);
- *                                 when absent, Shopify's return order is kept
- *
- * Two type handles are read in one round trip because the DEFINITION'S TYPE
- * HANDLE is fixed at creation time (renaming the display name does NOT change
- * it): this store's definition was created as `faq_entry` and later renamed
- * "Help Question". `faq_entry` (the live definition) is preferred;
- * `help_question` is the documented handle if the definition is ever recreated
- * from scratch. The definition needs Storefront API access enabled.
- *
- * Named operation `HelpQuestions` for Shopify query tracking.
- */
-export const HELP_QUESTIONS_QUERY = `#graphql
+// ---------------------------------------------------------------------------
+// Metaobjects (Help Center content).
+//
+// Two aliased `metaobjects` connections — one per accepted definition handle.
+// `faq_entry` is preferred; `help_question` is the documented handle for a
+// recreated definition (the Help Center falls back to it when no faq_entry
+// entries exist). Both select the field key/value pairs; lib/help.ts merges
+// them into question/answer pairs.
+// ---------------------------------------------------------------------------
+export const HELP_QUESTIONS_QUERY = /* GraphQL */ `
   query HelpQuestions {
     faqEntries: metaobjects(type: "faq_entry", first: 100) {
       edges {
