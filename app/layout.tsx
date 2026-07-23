@@ -13,17 +13,12 @@ const inter = Inter({
   variable: '--font-inter',
 });
 
-const META_LOGO_URL =
-  'https://cdn.shopify.com/s/files/1/0792/2286/6117/files/favicon.jpg?v=1784278511';
-
+// Icons come from the app/icon.tsx + app/apple-icon.tsx conventions (the
+// brand "A" tile, generated at runtime) — never from a hot-linked CDN file
+// that can rot into someone else's logo.
 export const metadata: Metadata = {
   title: 'Apeiron - Balance of Street & Luxury',
-  description: 'Limitless and infinite. High-Density 3D Ink Print Technology.',
-  icons: {
-    icon: META_LOGO_URL,
-    shortcut: META_LOGO_URL,
-    apple: META_LOGO_URL,
-  },
+  description: 'Heavyweight essentials, built to outlast the trend cycle. Shipped from New York.',
 };
 
 export default function RootLayout({children}: {children: React.ReactNode}) {

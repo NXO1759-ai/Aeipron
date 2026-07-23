@@ -115,10 +115,13 @@ export default function Home() {
 
   return (
     <div className="flex flex-col min-h-screen bg-apeiron-black text-apeiron-ivory">
-      {/* Chapter 00: Hero */}
+      {/* Chapter 00: Hero — lvh, NOT dvh: dvh resizes live when the mobile
+          browser chrome collapses on scroll, reflowing the whole hero (and
+          its filtered image) mid-gesture — a visible hitch at scroll start.
+          lvh stays constant, so the first swipe is pure compositor work. */}
       <section
         ref={heroRef}
-        className="relative h-[100dvh] w-full flex items-center justify-center overflow-hidden bg-apeiron-black"
+        className="relative h-[100lvh] w-full flex items-center justify-center overflow-hidden bg-apeiron-black"
       >
         <motion.div
           className="absolute inset-0 w-full h-full"

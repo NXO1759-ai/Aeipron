@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useCart } from '@/store/use-cart';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { formatCurrency } from '@/lib/utils';
@@ -26,6 +27,20 @@ export function CartDrawer() {
   const hydrated = useHydrated();
   const { status: checkoutStatus, redirect: redirectToCheckout, reset: resetCheckout } =
     useCheckoutRedirect();
+
+  // Lock the page while the drawer is open: without it, a swipe that chains
+  // past the drawer's own scroll area moves the PAGE behind it — two scroll
+  // contexts fighting makes the drawer feel like it's slipping. `overflow` on
+  // <html> keeps the current scroll position (no jump) and restores cleanly.
+  useEffect(() => {
+    if (!isOpen) return;
+    const root = document.documentElement;
+    const previous = root.style.overflow;
+    root.style.overflow = 'hidden';
+    return () => {
+      root.style.overflow = previous;
+    };
+  }, [isOpen]);
 
   // Before hydration, render the empty/zero baseline so SSR and client agree.
   // The protection product (Navidium) never renders as a line and never counts

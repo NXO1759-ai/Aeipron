@@ -284,3 +284,125 @@ describe('hydrateFromServer', () => {
     expect(s.totalQuantity).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// addItem — drawer-open opt-out (system adds must never pop the drawer)
+// ---------------------------------------------------------------------------
+
+describe('addItem — { open: false } (system adds)', () => {
+  it('keeps the drawer closed while still adding + reconciling', async () => {
+    mAddToCart.mockResolvedValue(singleCart);
+    await useCart.getState().addItem(INPUT, 1, { open: false });
+    const s = useCart.getState();
+    expect(s.isOpen).toBe(false); // never opened, optimistically or after
+    expect(s.items).toEqual(singleCart.lines); // reconcile still landed
+    expect(s.status).toBe('idle');
+    expect(mAddToCart).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not yank a closed drawer back open mid-flight', async () => {
+    let resolveAdd: (cart: typeof singleCart) => void = () => {};
+    mAddToCart.mockImplementation(
+      () => new Promise<typeof singleCart>((res) => (resolveAdd = res)),
+    );
+    const promise = useCart.getState().addItem(INPUT, 1, { open: false });
+    expect(useCart.getState().isOpen).toBe(false); // optimistic phase
+    resolveAdd(singleCart);
+    await promise;
+    expect(useCart.getState().isOpen).toBe(false); // reconcile phase
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Protection sweep — an orphaned protection line (no merchandise left) is
+// removed with the same server round of truth, so it can never ride
+// invisibly to checkout.
+// ---------------------------------------------------------------------------
+
+const protectionMerchandise = {
+  id: 'gid://shopify/ProductVariant/46514157257999',
+  title: 'OS',
+  price: { amount: '0.75', currencyCode: 'USD' },
+  image: null,
+  selectedOptions: [{ name: 'Title', value: 'Default Title' }],
+  product: { title: 'Protected Checkout', handle: 'shipping-protection-1' },
+};
+
+const protectionLineNode = {
+  id: 'gid://shopify/CartLine/prot999',
+  quantity: 1,
+  cost: {
+    amountPerQuantity: { amount: '0.75', currencyCode: 'USD' },
+    totalAmount: { amount: '0.75', currencyCode: 'USD' },
+  },
+  merchandise: protectionMerchandise,
+};
+
+const merchPlusProtectionCart = mapCart({
+  id: 'gid://shopify/Cart/sweep1?key=k',
+  totalQuantity: 3,
+  checkoutUrl: 'https://aeipron.myshopify.com/cart/c/sweep1?key=k',
+  cost: {
+    subtotalAmount: { amount: '20.75', currencyCode: 'USD' },
+    totalAmount: { amount: '20.75', currencyCode: 'USD' },
+    totalAmountEstimated: true,
+  },
+  lines: {
+    edges: [...singleLineCartNode.lines.edges, { node: protectionLineNode }],
+  },
+});
+
+const protectionOnlyCart = mapCart({
+  id: 'gid://shopify/Cart/sweep1?key=k',
+  totalQuantity: 1,
+  checkoutUrl: 'https://aeipron.myshopify.com/cart/c/sweep1?key=k',
+  cost: {
+    subtotalAmount: { amount: '0.75', currencyCode: 'USD' },
+    totalAmount: { amount: '0.75', currencyCode: 'USD' },
+    totalAmountEstimated: true,
+  },
+  lines: { edges: [{ node: protectionLineNode }] },
+});
+
+describe('protection sweep (orphaned insurance line)', () => {
+  it('removing the last merchandise line also removes the orphaned protection line', async () => {
+    useCart.getState().hydrateFromServer(merchPlusProtectionCart);
+    mRemoveCartLine
+      .mockResolvedValueOnce(protectionOnlyCart) // the buyer's removal
+      .mockResolvedValueOnce(emptyCart); // the sweep's removal
+
+    await useCart.getState().removeItem('gid://shopify/CartLine/abc123');
+
+    expect(mRemoveCartLine).toHaveBeenCalledTimes(2);
+    expect(mRemoveCartLine).toHaveBeenNthCalledWith(1, { lineId: 'gid://shopify/CartLine/abc123' });
+    expect(mRemoveCartLine).toHaveBeenNthCalledWith(2, { lineId: 'gid://shopify/CartLine/prot999' });
+    const s = useCart.getState();
+    expect(s.items).toHaveLength(0);
+    expect(s.totalQuantity).toBe(0);
+    expect(s.status).toBe('idle');
+  });
+
+  it('does NOT touch the protection line while merchandise remains', async () => {
+    useCart.getState().hydrateFromServer(merchPlusProtectionCart);
+    mRemoveCartLine.mockResolvedValueOnce(merchPlusProtectionCart); // server: merch still present
+
+    await useCart.getState().removeItem('gid://shopify/CartLine/abc123');
+
+    expect(mRemoveCartLine).toHaveBeenCalledTimes(1); // no sweep
+    expect(useCart.getState().items).toEqual(merchPlusProtectionCart.lines);
+  });
+
+  it('a failed sweep is non-fatal (cart stays consistent, no error surfaced)', async () => {
+    useCart.getState().hydrateFromServer(merchPlusProtectionCart);
+    mRemoveCartLine
+      .mockResolvedValueOnce(protectionOnlyCart)
+      .mockRejectedValueOnce(new Error('network'));
+
+    await useCart.getState().removeItem('gid://shopify/CartLine/abc123');
+
+    const s = useCart.getState();
+    expect(s.items).toEqual(protectionOnlyCart.lines); // first reconcile stands
+    expect(s.status).toBe('idle'); // sweep failure never surfaces as a cart error
+    expect(s.error).toBeNull();
+  });
+});
