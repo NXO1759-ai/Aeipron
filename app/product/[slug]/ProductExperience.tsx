@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useCart } from '@/store/use-cart';
 import { resolveSelectedVariant, resolvePreviewVariant, variantDescriptor } from '@/lib/product';
@@ -10,6 +10,7 @@ import { RichText } from '@/components/RichText';
 import { SizeSelector } from '@/components/SizeSelector';
 import { ColorSwatchGroup, isColorGroup } from '@/components/product/ColorSwatch';
 import { DisclosureGroup, SmoothDisclosure } from '@/components/product/SmoothDisclosure';
+import { StickyBuyBar } from '@/components/product/StickyBuyBar';
 import { ReviewsSection } from '@/components/product/ReviewsSection';
 import type { ProductReviewData } from '@/lib/judge-me';
 import type { Product, ProductOption } from '@/lib/types';
@@ -45,6 +46,28 @@ export function ProductExperience({ product, reviewData }: { product: Product; r
   // Selecting an option value resets this so the variant image always takes over.
   const [manualIndex, setManualIndex] = useState<number | null>(null);
   const { addItem } = useCart();
+
+  // Mobile sticky buy bar: shown only when the inline Add-to-bag button is
+  // scrolled OUT of view (the observer below flips this). Starts true so the
+  // bar never flashes on first paint.
+  const atcButtonRef = useRef<HTMLButtonElement>(null);
+  const [atcInView, setAtcInView] = useState(true);
+
+  // Mirror the inline button's visibility: when it leaves the viewport the
+  // thumb-zone bar takes over; when it returns, the bar retracts. Browsers
+  // without IntersectionObserver simply never show the bar — the inline
+  // button remains, exactly as before this feature.
+  useEffect(() => {
+    if (!('IntersectionObserver' in window)) return;
+    const button = atcButtonRef.current;
+    if (!button) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setAtcInView(entry.isIntersecting),
+      { threshold: 0 },
+    );
+    observer.observe(button);
+    return () => observer.disconnect();
+  }, []);
 
   const selectedVariant = resolveSelectedVariant(product, selections);
   const selectedVariantId = selectedVariant?.id ?? null;
@@ -134,6 +157,10 @@ export function ProductExperience({ product, reviewData }: { product: Product; r
         ? `$${product.price} – $${product.priceMax}`
         : `$${product.price}`;
 
+  // The size group's current selection, mirrored by the mobile sticky buy bar.
+  const sizeGroupName = product.options.find((group) => isSizeGroup(group.name))?.name;
+  const stickySizeLabel = sizeGroupName ? (selections[sizeGroupName] ?? null) : null;
+
   return (
     <div className="min-h-screen bg-primary-obsidian text-primary-cream">
       <div className="grid grid-cols-1 lg:grid-cols-2">
@@ -200,7 +227,7 @@ export function ProductExperience({ product, reviewData }: { product: Product; r
         </div>
 
         {/* Right: product info & actions */}
-        <div className="p-8 md:p-12 lg:p-24 flex flex-col justify-center min-h-[50vh] lg:min-h-[calc(100vh-5rem)]">
+        <div className="p-8 md:p-12 lg:p-24 max-lg:pb-28 flex flex-col justify-center min-h-[50vh] lg:min-h-[calc(100vh-5rem)]">
           <div className="max-w-md w-full mx-auto lg:mx-0">
             <h1 className="text-3xl md:text-5xl font-bold uppercase tracking-tighter mb-4">{product.name}</h1>
 
@@ -279,6 +306,7 @@ export function ProductExperience({ product, reviewData }: { product: Product; r
             })}
 
             <button
+              ref={atcButtonRef}
               type="button"
               onClick={handleAddToCart}
               disabled={!selectedVariantId}
@@ -331,6 +359,18 @@ export function ProductExperience({ product, reviewData }: { product: Product; r
           </div>
         </div>
       </div>
+
+      {/* Mobile thumb-zone buy action: fixed bottom bar that appears only when
+          the inline Add-to-bag button is scrolled out of view — never both at
+          once. Desktop never shows it (lg:hidden inside the component). */}
+      <StickyBuyBar
+        visible={!atcInView}
+        sizeLabel={stickySizeLabel}
+        hasSizeGroup={sizeGroupName != null}
+        priceLabel={priceLabel}
+        canAdd={selectedVariantId != null}
+        onAdd={handleAddToCart}
+      />
     </div>
   );
 }
