@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import type { Cart, CartLine } from '@/lib/types';
+import { merchandiseLinesOf, protectionLineOf } from '@/lib/protection';
 import {
   addToCart,
   updateCartLine,
@@ -94,7 +95,11 @@ interface CartState {
   error: string | null;
 
   // Mutations (async — optimistic + reconcile).
-  addItem: (item: AddItemInput, qty?: number) => Promise<void>;
+  // addItem opens the drawer by default (it is the buyer's action — feedback
+  // belongs on screen). SYSTEM adds (the shipping-protection toggle and the
+  // tier-swap chain) pass { open: false } so they can never yank the drawer
+  // back open after the buyer has closed it, or pop it over the /cart page.
+  addItem: (item: AddItemInput, qty?: number, opts?: { open?: boolean }) => Promise<void>;
   setQuantity: (lineId: string, quantity: number) => Promise<void>;
   removeItem: (lineId: string) => Promise<void>;
   clearCart: () => Promise<void>;
@@ -118,6 +123,28 @@ function applyCart(state: CartState, cart: Cart): Partial<CartState> {
   };
 }
 
+/**
+ * Apply the server cart, then sweep one edge case Shopify will not: a
+ * protection line with NO merchandise left in the bag. The drawer and /cart
+ * hide the protection row once the bag is empty, so an orphaned line would
+ * ride invisibly to checkout as a charge the buyer can't see or remove. The
+ * sweep reads only the POST-MUTATION server cart (never optimistic state), so
+ * it can't fight the buyer; its own reconcile re-checks the condition and
+ * stops (no loop). A failed sweep is non-fatal — the next hydration
+ * converges the cart.
+ */
+async function applyCartWithProtectionSweep(cart: Cart, apply: (cart: Cart) => void): Promise<void> {
+  apply(cart);
+  if (merchandiseLinesOf(cart.lines).length > 0) return;
+  const orphan = protectionLineOf(cart.lines);
+  if (!orphan) return;
+  try {
+    apply(await removeCartLine({ lineId: orphan.lineId }));
+  } catch {
+    // Non-fatal — converge on the next hydration instead.
+  }
+}
+
 const initialState = {
   isOpen: false,
   items: [] as CartLine[],
@@ -138,7 +165,7 @@ export const useCart = create<CartState>()((set, get) => ({
   closeCart: () => set({ isOpen: false }),
   toggleCart: () => set((s) => ({ isOpen: !s.isOpen })),
 
-  addItem: async (item, qty = 1) => {
+  addItem: async (item, qty = 1, opts) => {
     // Organizer QuickAdd (Phase 4) has no variant GID — reject gracefully.
     if (!item.merchandiseId) {
       set({
@@ -149,6 +176,8 @@ export const useCart = create<CartState>()((set, get) => ({
       return;
     }
 
+    // System adds (protection toggle / tier swap) keep the drawer as-is.
+    const open = opts?.open !== false;
     const quantity = clampQty(qty);
     const provLineId = `tmp-${item.merchandiseId}-${Date.now()}`;
     const provisional: CartLine = {
@@ -163,11 +192,12 @@ export const useCart = create<CartState>()((set, get) => ({
       quantity,
     };
 
-    // Optimistic: show the line instantly, open the drawer, mark pending.
+    // Optimistic: show the line instantly, open the drawer (unless the caller
+    // opted out), mark pending.
     set((s) => {
       const items = [...s.items, provisional];
       return {
-        isOpen: true,
+        ...(open ? { isOpen: true } : {}),
         status: 'pending',
         error: null,
         items,
@@ -179,7 +209,7 @@ export const useCart = create<CartState>()((set, get) => ({
 
     try {
       const cart = await addToCart({ merchandiseId: item.merchandiseId, quantity });
-      set((s) => ({ ...applyCart(s, cart) }));
+      await applyCartWithProtectionSweep(cart, (c) => set((s) => ({ ...applyCart(s, c) })));
     } catch (e) {
       // Roll back the provisional line; recompute totals from what remains.
       set((s) => {
@@ -218,7 +248,7 @@ export const useCart = create<CartState>()((set, get) => ({
 
     try {
       const cart = await updateCartLine({ lineId, quantity: qty });
-      set((s) => ({ ...applyCart(s, cart) }));
+      await applyCartWithProtectionSweep(cart, (c) => set((s) => ({ ...applyCart(s, c) })));
     } catch (e) {
       set({
         status: 'error',
@@ -249,7 +279,7 @@ export const useCart = create<CartState>()((set, get) => ({
 
     try {
       const cart = await removeCartLine({ lineId });
-      set((s) => ({ ...applyCart(s, cart) }));
+      await applyCartWithProtectionSweep(cart, (c) => set((s) => ({ ...applyCart(s, c) })));
     } catch (e) {
       set({
         status: 'error',

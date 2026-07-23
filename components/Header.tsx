@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Menu, X, ShoppingBag } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { usePathname } from "next/navigation";
 import { useCart } from "@/store/use-cart";
@@ -13,6 +13,20 @@ export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const pathname = usePathname();
   const isHome = pathname === "/";
+
+  // The editorial home page scrolls now: the header starts transparent over
+  // the hero, then turns opaque once the hero has scrolled away — otherwise
+  // the fixed wordmark floats over chapter text mid-scroll. A boolean flip
+  // only (no per-frame work; unchanged state values bail out of rendering).
+  const [solidOnHome, setSolidOnHome] = useState(false);
+  useEffect(() => {
+    if (!isHome) return;
+    const onScroll = () => setSolidOnHome(window.scrollY > window.innerHeight * 0.85);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [isHome]);
+  const headerSolid = !isHome || solidOnHome;
 
   const { items, totalQuantity, toggleCart } = useCart();
   const hydrated = useHydrated();
@@ -42,8 +56,9 @@ export function Header() {
         // the browser re-rasterizes the blurred backdrop every scroll frame.
         // In this dark theme an opaque bar is visually near-identical to the
         // old 70%-black + blur, but composites a single layer with no per-frame
-        // filter cost. Home stays transparent (no scroll there).
-        className={`fixed top-0 w-full z-40 ${isHome ? "bg-transparent" : "bg-apeiron-black border-b border-ui-concrete/10"}`}
+        // filter cost. Home starts transparent over the hero and flips opaque
+        // (border kept always-on so the flip causes no layout shift).
+        className={`fixed top-0 w-full z-40 transition-colors duration-300 border-b ${headerSolid ? "bg-apeiron-black border-ui-concrete/10" : "bg-transparent border-transparent"}`}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-24 flex items-center justify-between">
           {/* Left Hemisphere: Brand Lockup */}

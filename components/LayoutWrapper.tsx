@@ -17,7 +17,9 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
       <main className={!isCheckout && !isHome ? 'pt-24 min-h-screen' : 'min-h-screen'}>
         {children}
       </main>
-      {!isCheckout && !isHome && <Footer />}
+      {/* Footer now renders on the home page too: the editorial chapter
+          scroll ends in standard page chrome. Only /checkout stays chromeless. */}
+      {!isCheckout && <Footer />}
       {!isCheckout && <CartHydrator />}
       {!isCheckout && <CartDrawer />}
     </>

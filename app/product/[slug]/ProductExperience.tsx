@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import Image from 'next/image';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCart } from '@/store/use-cart';
 import { resolveSelectedVariant, resolvePreviewVariant, variantDescriptor } from '@/lib/product';
 import { splitOptionValues } from '@/lib/size-selector';
@@ -45,6 +46,10 @@ export function ProductExperience({ product, reviewData }: { product: Product; r
   // A manually-browsed thumbnail index, or null when the variant drives the image.
   // Selecting an option value resets this so the variant image always takes over.
   const [manualIndex, setManualIndex] = useState<number | null>(null);
+  // Mobile-only swipe hint over the gallery (the thumbnail strip is
+  // desktop-only, so swiping is the ONLY way to reach further images on a
+  // phone). Dismissed permanently after the first successful swipe.
+  const [swipeHintDismissed, setSwipeHintDismissed] = useState(false);
   const { addItem } = useCart();
 
   // Mobile sticky buy bar: shown only when the inline Add-to-bag button is
@@ -115,6 +120,7 @@ export function ProductExperience({ product, reviewData }: { product: Product; r
     const deltaX = e.changedTouches[0].clientX - touchStartX.current;
     touchStartX.current = null;
     if (Math.abs(deltaX) < 40) return; // too small to be a swipe
+    setSwipeHintDismissed(true);
     const direction = deltaX < 0 ? 1 : -1; // swipe left → next, right → previous
     setManualIndex((activeImageIndex + direction + product.images.length) % product.images.length);
   };
@@ -193,6 +199,21 @@ export function ProductExperience({ product, reviewData }: { product: Product; r
                   No image
                 </div>
               )}
+
+              {/* Mobile swipe hint — centered at the bottom of the frame,
+                  subtle and non-interactive; gone after the first swipe. */}
+              {product.images.length > 1 && !swipeHintDismissed ? (
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-3 border border-ui-concrete/30 bg-apeiron-black/55 px-4 py-2 backdrop-blur-sm lg:hidden"
+                >
+                  <ChevronLeft className="h-3 w-3 text-primary-cream/60 motion-safe:animate-pulse" />
+                  <span className="text-[10px] uppercase tracking-[0.3em] text-primary-cream/80">
+                    Swipe
+                  </span>
+                  <ChevronRight className="h-3 w-3 text-primary-cream/60 motion-safe:animate-pulse" />
+                </div>
+              ) : null}
             </div>
 
             {/* Thumbnails — desktop only; variant selection resets to the variant image */}

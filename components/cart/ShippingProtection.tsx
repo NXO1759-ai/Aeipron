@@ -15,6 +15,11 @@
 // `enabled` reads, so the switch stays on after Shopify reconciles the line
 // under Navidium's own product title ('Protected Checkout').
 //
+// Every addItem here is a SYSTEM add ({ open: false }): the toggle lives
+// inside the drawer / on /cart already, and the tier-swap chain runs on its
+// own schedule — neither may pop the drawer open or drag it back after the
+// buyer has closed it.
+//
 // Presentation mirrors the Navidium widget format: shield mark, "Shipping
 // Insurance +$X" label, and the coverage copy. While a quote is in flight the
 // row renders in a loading state (price skeleton + disabled switch) so it
@@ -113,14 +118,18 @@ export function ShippingProtection({ active }: { active: boolean }) {
     const staleLineId = protectionLine.lineId;
     (async () => {
       await removeItem(staleLineId);
-      await addItem({
-        merchandiseId: liveQuote.variantId,
-        name: 'Shipping protection',
-        price: liveQuote.price,
-        variantLabel: 'OS',
-        image: '',
-        currencyCode,
-      });
+      await addItem(
+        {
+          merchandiseId: liveQuote.variantId,
+          name: 'Shipping protection',
+          price: liveQuote.price,
+          variantLabel: 'OS',
+          image: '',
+          currencyCode,
+        },
+        1,
+        { open: false },
+      );
       swappingRef.current = false;
     })();
   }, [liveQuote, protectionLine, addItem, removeItem, currencyCode]);
@@ -132,14 +141,18 @@ export function ShippingProtection({ active }: { active: boolean }) {
   const handleToggle = (checked: boolean) => {
     if (!liveQuote) return;
     if (checked) {
-      addItem({
-        merchandiseId: liveQuote.variantId,
-        name: 'Shipping protection',
-        price: liveQuote.price,
-        variantLabel: 'OS',
-        image: '',
-        currencyCode,
-      });
+      addItem(
+        {
+          merchandiseId: liveQuote.variantId,
+          name: 'Shipping protection',
+          price: liveQuote.price,
+          variantLabel: 'OS',
+          image: '',
+          currencyCode,
+        },
+        1,
+        { open: false },
+      );
     } else if (protectionLine) {
       removeItem(protectionLine.lineId);
     }
