@@ -24,7 +24,7 @@ export default function Home() {
           </h1>
           <Link
             href="/shop"
-            className="bg-transparent border border-apeiron-ivory text-apeiron-ivory px-12 py-5 uppercase tracking-widest font-bold text-sm transition-all duration-[600ms] ease-[cubic-bezier(0.25,1,0.5,1)] hover:bg-apeiron-ivory hover:text-apeiron-black"
+            className="bg-transparent border border-apeiron-ivory text-apeiron-ivory px-12 py-5 uppercase tracking-widest font-bold text-sm transition-all duration-[600ms] ease-[cubic-bezier(0.25,1,0.5,1)] hover:bg-apeiron-ivory hover:text-apeiron-black active:bg-apeiron-ivory active:text-apeiron-black"
           >
             Explore The Core
           </Link>
