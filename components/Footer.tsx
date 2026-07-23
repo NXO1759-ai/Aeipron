@@ -9,8 +9,8 @@ import { FooterLegal } from './FooterLegal';
 //
 // Four columns on desktop (two on mobile, brand/newsletter spanning full width):
 //   1. Brand block — small APEIRON® wordmark (tight tracking + ®, per the
-//      brand banner — deliberately different from the header lockup) and the
-//      "Beyond the trend." line.
+//      brand banner — deliberately different from the header lockup), no
+//      tagline (the "Beyond the trend." line now lives in the home closer).
 //   2. Shop links — Shop, Our Story (with arrows), no group label.
 //   3. Support links — Help Center, Contact Us (with arrows), no group label.
 //   4. Join the List — newsletter copy + NewsletterForm email capture, then a
@@ -106,10 +106,6 @@ export function Footer() {
                 </h2>
               </Link>
             </div>
-
-            <p className="text-ui-concrete text-xs leading-relaxed max-w-xs">
-              Beyond the trend.
-            </p>
           </div>
 
           {/* Shop links — left column (no group label) */}

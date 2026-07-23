@@ -235,12 +235,11 @@ export default function Home() {
           viewport={{ once: true, margin: '-100px' }}
           variants={fadeUp}
         >
-          <h2 className="text-4xl md:text-6xl lg:text-7xl font-medium uppercase tracking-tighter mb-8">
-            Quiet
+          <h2 className="text-4xl md:text-6xl lg:text-7xl font-medium uppercase tracking-tighter mb-12">
+            Beyond
             <br />
-            Confidence.
+            the trend.
           </h2>
-          <p className="text-sm md:text-base text-ui-concrete tracking-wide mb-12">Beyond the trend.</p>
           <Link
             href="/story"
             className="text-xs uppercase tracking-widest text-apeiron-ivory underline underline-offset-8 hover:text-accent-energy active:text-accent-energy transition-colors"
