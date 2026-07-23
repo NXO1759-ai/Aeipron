@@ -8,7 +8,8 @@ import { FooterLegal } from './FooterLegal';
 // Footer — redesigned site-wide footer (reference image).
 //
 // Four columns on desktop (two on mobile, brand/newsletter spanning full width):
-//   1. Brand block — Apeiron text lockup (matches Header), Japanese tagline,
+//   1. Brand block — small APEIRON® wordmark (tight tracking + ®, per the
+//      brand banner — deliberately different from the header lockup) and the
 //      "Beyond the trend." line.
 //   2. Shop links — Shop, Our Story (with arrows), no group label.
 //   3. Support links — Help Center, Contact Us (with arrows), no group label.
@@ -94,17 +95,16 @@ export function Footer() {
     <footer className="bg-apeiron-black text-apeiron-ivory border-t border-ui-concrete/20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-12">
-          {/* Brand block */}
+          {/* Brand block — small APEIRON® wordmark: tight tracking + ® (per
+              the brand banner), deliberately DIFFERENT from the header lockup
+              (wide tracking + Japanese tagline, which stays header-only). */}
           <div className="col-span-2 lg:col-span-1 flex flex-col gap-4">
             <div className="flex flex-col items-start">
               <Link href="/" className="group">
-                <h2 className="text-2xl font-bold uppercase tracking-[0.2em] text-apeiron-ivory leading-none">
-                  Apeiron
+                <h2 className="text-lg font-semibold uppercase tracking-tight text-apeiron-ivory leading-none">
+                  Apeiron<sup className="text-[0.55em] font-normal">®</sup>
                 </h2>
               </Link>
-              <span className="text-[10px] text-apeiron-ivory tracking-[0.3em] mt-1 leading-none font-medium">
-                アペイロン
-              </span>
             </div>
 
             <p className="text-ui-concrete text-xs leading-relaxed max-w-xs">

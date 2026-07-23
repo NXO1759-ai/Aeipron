@@ -25,8 +25,11 @@ export default async function ShopPage() {
     <div className="min-h-screen bg-apeiron-black text-apeiron-ivory pb-24">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
-        {/* Header — left-aligned (brand direction). */}
-        <div className="flex flex-col md:flex-row justify-between items-end mb-16 border-b border-ui-concrete/20 pb-8 pt-8">
+        {/* Header — left-aligned at the theme boundary on every viewport
+            (items-start on mobile's column direction: items-end would pin it
+            to the RIGHT edge; md:items-end keeps desktop baseline alignment
+            for when the Filter/Sort controls return). */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-16 border-b border-ui-concrete/20 pb-8 pt-8">
           <div>
             <h1 className="font-inter text-4xl md:text-5xl font-medium uppercase tracking-tighter mb-4">
               Shop
