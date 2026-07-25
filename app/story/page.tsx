@@ -21,8 +21,8 @@ export default function StoryPage() {
         <div className="absolute inset-0 w-full h-full z-0">
           <div className="absolute inset-0 bg-[#0a0a0a]/60 z-10" />
           <Image 
-            src="https://picsum.photos/seed/guitarheadstock/1920/1080"
-            alt="Cinematic macro shot of a guitar headstock"
+            src="/home/hero.jpg"
+            alt="Macro photograph of the hood and drawstrings of a black heavyweight loopback terry hoodie"
             fill
             priority
             className="object-cover contrast-125 brightness-[0.6]"
@@ -74,8 +74,8 @@ export default function StoryPage() {
             className="relative aspect-[3/4] md:aspect-[4/5] bg-neutral-900 overflow-hidden"
           >
             <Image
-              src="https://picsum.photos/seed/storyorigin/1200/1600"
-              alt="16mm cinematic macro-shot of a garment"
+              src="/home/fit.jpg"
+              alt="Hooded figure against a dark concrete wall, showing the boxy structured fit of the black hoodie"
               fill
               sizes="(min-width: 768px) 50vw, 100vw"
               className="object-cover contrast-125 brightness-75"
