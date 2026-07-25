@@ -16,7 +16,8 @@ vi.mock('server-only', () => ({}));
 //   - summary math: thumbsUp = 5★ + 4★, thumbsDown = 1★ (2–3★ count toward
 //     total/byRating only)
 //   - ordering: 5★ → 1★, newest first inside a star band
-//   - pagination: follows total_pages; responses cached for 5 minutes
+//   - pagination: follows total_pages (remaining pages fetched CONCURRENTLY);
+//     responses cached for 5 minutes
 // ---------------------------------------------------------------------------
 
 const { getProductReviewData } = await import('@/lib/judge-me');
@@ -150,6 +151,32 @@ describe('pagination + caching', () => {
     expect(mockFetch.mock.calls[0][0]).toContain('page=1');
     expect(mockFetch.mock.calls[1][0]).toContain('page=2');
     expect(data.summary.total).toBe(2);
+  });
+
+  it('requests pages 2..N concurrently — they all start before any resolves', async () => {
+    // Deferred promises record which pages were in flight simultaneously.
+    const started: string[] = [];
+    const resolvers: Array<() => void> = [];
+    mockFetch.mockImplementation((url: string) => {
+      started.push(url);
+      return new Promise((resolve) => {
+        const n = started.length;
+        resolvers.push(() => resolve({ ok: true, json: async () => page([review(n, 5)], 3) }));
+      });
+    });
+
+    const pending = getProductReviewData('hoodie');
+    // Let the microtask queue run: page 1 resolves first, then 2+3 fire together.
+    await new Promise((r) => setTimeout(r, 0));
+    resolvers[0]?.(); // resolve page 1 → triggers the concurrent batch
+    await new Promise((r) => setTimeout(r, 0));
+    expect(started).toHaveLength(3); // pages 2 and 3 started without waiting on each other
+    expect(started[0]).toContain('page=1');
+    expect(started[1]).toContain('page=2');
+    expect(started[2]).toContain('page=3');
+    resolvers.forEach((resolve) => resolve());
+    const data = await pending;
+    expect(data.summary.total).toBe(3);
   });
 
   it('passes the shop domain + token and caches for 5 minutes', async () => {
