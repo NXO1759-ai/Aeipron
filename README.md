@@ -40,6 +40,12 @@ cart, and checkout is the Shopify Storefront API.
 - **Legal/help**: Shopify page content rendered through a whitelist HTML
   parser (no `dangerouslySetInnerHTML`); help content falls back to bundled
   copy when Shopify is unreachable.
+- **Scroll performance**: the only scroll-linked animation (home hero
+  parallax) is gated OFF on touch devices (`useCoarsePointer`) — a
+  full-viewport CSS-filtered image being translated per scroll frame is the
+  classic mobile jank source. Below-fold sections use `content-visibility:
+  auto` (`.cv-auto`); fixed chrome stays opaque (no backdrop blur over
+  scrolling content).
 
 ## Trust invariants (do not break)
 

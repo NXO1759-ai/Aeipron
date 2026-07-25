@@ -62,7 +62,7 @@ const CHAPTERS: Chapter[] = [
 
 function ChapterSection({ chapter }: { chapter: Chapter }) {
   return (
-    <section className="border-t border-ui-concrete/20">
+    <section className="cv-auto border-t border-ui-concrete/20">
       <div className="grid md:grid-cols-2">
         <div
           className={`relative aspect-[4/5] md:aspect-auto md:min-h-[85vh] overflow-hidden ${
@@ -103,7 +103,7 @@ export default function Home() {
       ))}
 
       {/* Chapter 04: the first chapter — the hoodie, with the buy action */}
-      <section className="border-t border-ui-concrete/20 px-6 md:px-12 py-24 md:py-32">
+      <section className="cv-auto border-t border-ui-concrete/20 px-6 md:px-12 py-24 md:py-32">
         <FadeIn className="max-w-md mx-auto flex flex-col items-center text-center">
           <p className="text-xs uppercase tracking-widest text-ui-concrete mb-6">04 / The First Chapter</p>
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold uppercase tracking-tighter mb-8">
@@ -148,7 +148,7 @@ export default function Home() {
       </section>
 
       {/* Closing anchor */}
-      <section className="border-t border-ui-concrete/20 px-6 py-24 md:py-40 text-center">
+      <section className="cv-auto border-t border-ui-concrete/20 px-6 py-24 md:py-40 text-center">
         <FadeIn>
           <h2 className="text-4xl md:text-6xl lg:text-7xl font-medium uppercase tracking-tighter mb-12">
             Beyond

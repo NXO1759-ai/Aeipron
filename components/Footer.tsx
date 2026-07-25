@@ -92,7 +92,7 @@ export function Footer() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="bg-apeiron-black text-apeiron-ivory border-t border-ui-concrete/20">
+    <footer className="cv-auto bg-apeiron-black text-apeiron-ivory border-t border-ui-concrete/20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-12">
           {/* Brand block — small APEIRON® wordmark: tight tracking + ® (per

@@ -51,7 +51,7 @@ export default function StoryPage() {
       </section>
 
       {/* Section 2: The Origin (Split-Pane Layout) */}
-      <section className="px-4 md:px-12 py-24 md:py-32 border-t border-neutral-800">
+      <section className="cv-auto px-4 md:px-12 py-24 md:py-32 border-t border-neutral-800">
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-24 items-center">
           <motion.div
             initial="hidden"
@@ -85,7 +85,7 @@ export default function StoryPage() {
       </section>
 
       {/* Section 3: The Craftsmanship (Text-Heavy / Editorial Block) */}
-      <section className="px-4 py-24 md:py-48 border-t border-neutral-800">
+      <section className="cv-auto px-4 py-24 md:py-48 border-t border-neutral-800">
         <motion.div
           initial="hidden"
           whileInView="visible"
@@ -103,7 +103,7 @@ export default function StoryPage() {
       </section>
 
       {/* Section 4: The Philosophy (Footer/Closing Anchor) */}
-      <section className="px-4 py-24 md:py-32 border-t border-neutral-800 flex flex-col items-center text-center">
+      <section className="cv-auto px-4 py-24 md:py-32 border-t border-neutral-800 flex flex-col items-center text-center">
         <motion.div
           initial="hidden"
           whileInView="visible"

@@ -13,14 +13,24 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { motion, useReducedMotion, useScroll, useTransform } from 'motion/react';
 
+import { useCoarsePointer } from '@/hooks/use-coarse-pointer';
 import { fadeUp } from './FadeIn';
 
 export function Hero() {
   const reduceMotion = useReducedMotion();
+  const coarsePointer = useCoarsePointer();
   const heroRef = useRef<HTMLElement>(null);
   // Hero parallax: the background drifts up slightly as the page scrolls away.
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
   const heroY = useTransform(scrollYProgress, [0, 1], ['0%', '12%']);
+
+  // The parallax runs ONLY on precise-pointer devices (desktop). Translating a
+  // full-viewport, CSS-FILTERED image re-rasterizes that filtered layer on
+  // every scroll frame — the #1 scroll-jank source on mobile GPUs. Touch
+  // devices get a static hero: pure document scroll, zero per-frame work.
+  // (The still-present useScroll MotionValue costs one passive listener and no
+  // style writes when unused.) The same gate covers the load-time settle zoom.
+  const animated = !reduceMotion && !coarsePointer;
 
   return (
     /* lvh, NOT dvh: dvh resizes live when the mobile browser chrome collapses
@@ -32,14 +42,17 @@ export function Hero() {
       className="relative h-[100lvh] w-full flex items-center justify-center overflow-hidden bg-apeiron-black"
     >
       <motion.div
-        className="absolute inset-0 w-full h-full"
-        style={reduceMotion ? undefined : { y: heroY }}
+        // will-change promotes the parallax layer so desktop scroll stays on
+        // the compositor; skipped when the effect is gated off (mobile/reduced
+        // motion) so it doesn't pin a 100lvh layer in memory for nothing.
+        className={`absolute inset-0 w-full h-full ${animated ? 'will-change-transform' : ''}`}
+        style={animated ? { y: heroY } : undefined}
       >
         <div className="absolute inset-0 bg-apeiron-black/40 z-10" />
         <motion.div
           className="absolute inset-0"
-          initial={reduceMotion ? undefined : { scale: 1.06 }}
-          animate={reduceMotion ? undefined : { scale: 1 }}
+          initial={animated ? { scale: 1.06 } : undefined}
+          animate={animated ? { scale: 1 } : undefined}
           transition={{ duration: 2.4, ease: [0.25, 1, 0.5, 1] }}
         >
           <Image
