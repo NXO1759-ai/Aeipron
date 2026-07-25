@@ -17,7 +17,12 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params;
   // React cache() in lib/catalog dedupes this with the page render's read.
-  const product = await getProductBySlug(slug);
+  // A Shopify failure degrades to default metadata — invariant: failures
+  // degrade, they don't throw.
+  const product = await getProductBySlug(slug).catch((error) => {
+    console.error('[product] catalog read failed:', error);
+    return null;
+  });
   if (!product) return {};
   const description =
     product.description.replace(/\s+/g, ' ').trim().slice(0, 160) ||
@@ -37,11 +42,19 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const { slug } = await params;
 
   // Resolve the actual product. Unknown slugs render the 404 boundary instead
-  // of silently falling back to a hardcoded item. Judge.me reviews load in
-  // parallel (slug === Shopify product handle, which is also the Judge.me
-  // product_handle); any Judge.me failure resolves to the empty state, never
-  // to a page error.
-  const [product, reviewData] = await Promise.all([getProductBySlug(slug), getProductReviewData(slug)]);
+  // of silently falling back to a hardcoded item. A Shopify failure degrades
+  // to the same 404 boundary rather than a 500 — consistent with /shop and
+  // /collection (invariant: failures degrade, they don't throw). Judge.me
+  // reviews load in parallel (slug === Shopify product handle, which is also
+  // the Judge.me product_handle); any Judge.me failure resolves to the empty
+  // state, never to a page error.
+  const [product, reviewData] = await Promise.all([
+    getProductBySlug(slug).catch((error) => {
+      console.error('[product] catalog read failed:', error);
+      return null;
+    }),
+    getProductReviewData(slug),
+  ]);
   if (!product) notFound();
 
   // The gallery + buybox live in one client island (ProductExperience) so the
