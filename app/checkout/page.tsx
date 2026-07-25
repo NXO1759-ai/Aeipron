@@ -49,7 +49,39 @@ import { CheckoutButton } from './CheckoutButton';
 export const dynamic = 'force-dynamic';
 
 export default async function CheckoutPage() {
-  const cart = await getCart();
+  // A Shopify read failure here is NOT the empty-bag case: a buyer with a
+  // full cart during a Storefront API outage must see a recoverable outage
+  // state, not "Your bag is empty" and never a 500 (invariant: failures
+  // degrade, they don't throw). force-dynamic, so nothing is cached.
+  let cart: Awaited<ReturnType<typeof getCart>> = null;
+  let cartReadFailed = false;
+  try {
+    cart = await getCart();
+  } catch (error) {
+    console.error('[checkout] cart read failed:', error);
+    cartReadFailed = true;
+  }
+
+  // --- Shopify unreachable ------------------------------------------------
+  if (cartReadFailed) {
+    return (
+      <div className="min-h-screen bg-primary-obsidian text-primary-cream flex flex-col items-center justify-center px-6 text-center">
+        <Link href="/" className="mb-12">
+          <h1 className="text-3xl font-bold uppercase tracking-[0.2em] text-primary-cream">Apeiron</h1>
+        </Link>
+        <h2 className="text-2xl font-bold uppercase tracking-wider mb-3">Checkout is temporarily unavailable</h2>
+        <p className="text-ui-concrete text-sm mb-8 max-w-md">
+          Your bag is safe — our store backend is not answering right now. Please try again in a few minutes.
+        </p>
+        <Link
+          href="/cart"
+          className="border border-ui-concrete px-8 py-3 text-sm uppercase tracking-widest font-bold text-primary-cream hover:bg-primary-cream hover:text-primary-obsidian transition-colors"
+        >
+          Back to your bag
+        </Link>
+      </div>
+    );
+  }
 
   // --- Empty bag (no cookie / expired / zero lines) ------------------------
   if (!cart || cart.lines.length === 0) {

@@ -19,7 +19,6 @@ export function CartDrawer() {
     totalQuantity,
     subtotalAmount,
     currencyCode,
-    status,
     error,
     setQuantity,
     removeItem,

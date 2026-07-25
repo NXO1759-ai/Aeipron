@@ -1,34 +1,36 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 
 @theme {
-  /* Brand — from DESIGN-SYSTEM.md */
-  --color-apeiron-black: #0a0a0a;
-  --color-apeiron-ivory: #fdfcf0;
-
-  /* Legacy semantic tokens mapped onto the brand neutrals */
-  --color-primary-slate: #1a1d21;
-  --color-primary-cream: #f4f2ed;
-  --color-accent-energy: #ff2a5f;
-  --color-ui-concrete: #8e9299;
-
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-inter: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --color-primary-obsidian: #0A0A0A;
+  --color-primary-cream: #F3EFE7;
+  --color-ui-concrete: #8A8A8A;
+  --color-accent-energy: #FF2A5F;
+  --color-apeiron-black: #050505;
+  --color-apeiron-ivory: #d2c6b6;
+  --font-sans: "Space Grotesk", system-ui, sans-serif;
+  --font-inter: var(--font-inter), system-ui, sans-serif;
+  /* Page-shell width: `max-w-7xl` wraps the header, footer and every
+     page-level container. The 80rem (1280px) default leaves wide empty
+     bands on large monitors; 100% lets the shell track the viewport
+     (the px-4/sm:px-6/lg:px-8 padding still applies). Set a fixed rem
+     value here if a ceiling on ultra-wide displays is ever wanted. */
+  --container-7xl: 100%;
 }
 
 @layer base {
   html {
-    /* Smooth anchor/target scrolling (respects prefers-reduced-motion via UA
-       styles) and no scroll-chaining into the browser chrome overscroll */
+    /* Anchor/jump navigation eases instead of snapping. Wheel/touch scrolling
+       itself is NOT affected (no "laggy scroll" risk). */
     scroll-behavior: smooth;
+    /* Stop scroll-gesture theft: no pull-to-refresh reloads (Android Chrome)
+       and no scroll-chaining into the page behind an open overlay. */
     overscroll-behavior-y: none;
   }
-
   body {
     @apply bg-apeiron-black text-apeiron-ivory font-sans;
   }
-
-  /* Kill the 300ms tap delay flash and the grey tap highlight on mobile —
-     taps feel instant, no visual artifacts mid-gesture. */
+  /* Kill the 300ms double-tap-zoom delay on interactive elements and the grey
+     tap flash on iOS — taps feel instant. */
   a,
   button {
     touch-action: manipulation;
@@ -36,24 +38,28 @@
   }
 }
 
-/* Below-fold rendering skip: the browser doesn't lay out or paint these
-   sections until they approach the viewport — big first-scroll win on long
-   editorial pages. contain-intrinsic-size reserves ~80vh per section so the
-   scrollbar geometry stays stable as content materializes. */
+/* Rendering skip for below-fold sections: the browser skips layout + paint for
+   off-screen content and renders it as it nears the viewport — less work per
+   scroll frame on long editorial pages (home/story/footer). `auto` in
+   contain-intrinsic-size remembers the last rendered size, so the scrollbar
+   doesn't jump. No-op where unsupported (Firefox) — safe progressive
+   enhancement. Apply only to sections that start BELOW the fold. */
 .cv-auto {
   content-visibility: auto;
   contain-intrinsic-size: auto 80vh;
 }
 
-/* ------------------------------------------------------------------ */
-/* Motion primitives                                                   */
-/* ------------------------------------------------------------------ */
+/* Hide scrollbar for clean aesthetic */
+::-webkit-scrollbar {
+  width: 0px;
+  background: transparent;
+}
 
-/* Shared fade/rise used by whileInView reveals (see components/home/FadeIn) */
-@keyframes apeiron-fade-up {
+/* Reviews Details pop-up enter — opacity/transform only (compositor). */
+@keyframes modal-in {
   from {
     opacity: 0;
-    transform: translateY(16px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -61,64 +67,144 @@
   }
 }
 
-/* Size selector (PDP) */
-.size-option {
-  position: relative;
-  transition:
-    color 300ms cubic-bezier(0.25, 1, 0.5, 1),
-    border-color 300ms cubic-bezier(0.25, 1, 0.5, 1),
-    background-color 300ms cubic-bezier(0.25, 1, 0.5, 1);
+/* ------------------------------------------------------------------------- */
+/* Size selector (components/SizeSelector.tsx) — scoped under .size-selector  */
+/* so nothing here leaks into the global theme. Ivory-on-obsidian ruler with  */
+/* a sliding triangular marker; transform/opacity motion only.                */
+/* ------------------------------------------------------------------------- */
+
+.size-selector {
+  --bg: #0a0a0a;
+  --ivory: #f5f1e8;
+  --line: color-mix(in srgb, var(--ivory) 40%, transparent);
+  --line-soft: color-mix(in srgb, var(--ivory) 25%, transparent);
+  --strike: color-mix(in srgb, var(--ivory) 35%, transparent);
 }
 
-.size-option::after {
+.size-selector__pill {
+  position: relative;
+  border: 1px solid var(--line);
+  color: var(--ivory);
+  transition:
+    background-color 200ms ease,
+    color 200ms ease,
+    border-color 200ms ease;
+}
+
+.size-selector__pill:hover:not(.size-selector__pill--selected):not(.size-selector__pill--sold-out) {
+  border-color: color-mix(in srgb, var(--ivory) 70%, transparent);
+}
+
+.size-selector__pill--selected {
+  background: var(--ivory);
+  border-color: var(--ivory);
+  color: #000;
+}
+
+.size-selector__pill--sold-out {
+  color: var(--line-soft);
+  border-color: var(--line-soft);
+  cursor: not-allowed;
+}
+
+/* Diagonal strike-through across a sold-out pill (pseudo-element, no extra DOM). */
+.size-selector__pill--sold-out::after {
   content: '';
   position: absolute;
-  left: 10%;
-  right: 10%;
-  bottom: 6px;
+  left: 50%;
+  top: 50%;
+  width: 130%;
   height: 1px;
-  background: currentColor;
-  transform: scaleX(0);
-  transform-origin: center;
-  transition: transform 400ms cubic-bezier(0.25, 1, 0.5, 1);
+  background: var(--strike);
+  transform: translate(-50%, -50%) rotate(-16deg);
+  pointer-events: none;
 }
 
-.size-option[data-selected='true']::after {
-  transform: scaleX(1);
+.size-selector__pill:focus-visible {
+  outline: 1px solid var(--ivory);
+  outline-offset: 2px;
 }
 
-/* Dialog motion (footer legal pop-ups) — opacity/transform only, no layout */
-@keyframes dialog-overlay-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+/* Ruler: tall ticks every 40px, short ticks every 8px, hairline baseline. */
+.size-selector__track {
+  height: 12px;
+  background-image:
+    repeating-linear-gradient(to right, var(--line) 0 1px, transparent 1px 40px),
+    repeating-linear-gradient(to right, var(--line-soft) 0 1px, transparent 1px 8px),
+    linear-gradient(to right, var(--line-soft), var(--line-soft));
+  background-size:
+    100% 12px,
+    100% 8px,
+    100% 1px;
+  background-position:
+    bottom left,
+    bottom left,
+    bottom left;
+  background-repeat: no-repeat;
 }
 
-@keyframes dialog-panel-in {
-  from {
-    opacity: 0;
-    transform: translateY(12px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+/* Border-trick triangle; slides with a compositor-only translateX. */
+.size-selector__marker {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 7px solid var(--ivory);
+  transition: transform 350ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
 }
 
-.dialog-overlay {
-  animation: dialog-overlay-in 250ms ease-out;
-}
-
-.dialog-panel {
-  animation: dialog-panel-in 350ms cubic-bezier(0.25, 1, 0.5, 1);
+/* Hidden until the first measurement lands — no slide-in from the edge. */
+.size-selector__marker--idle {
+  opacity: 0;
+  transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dialog-overlay,
-  .dialog-panel {
+  .size-selector__marker {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------------------- */
+/* Dialog motion — shared enter/exit choreography for the site's pop-ups      */
+/* (Reviews details, legal policy dialogs). Backdrop fades, panel drifts up   */
+/* 8px; both run on opacity/transform only (compositor), and the exit class   */
+/* is applied by use-dialog-exit for the outro before unmount. Reduced        */
+/* motion disables the animation entirely.                                    */
+/* ------------------------------------------------------------------------- */
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes modal-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.dialog-backdrop-in { animation: fade-in 200ms ease-out; }
+.dialog-backdrop-out { animation: fade-out 160ms ease-in forwards; }
+.dialog-panel-in { animation: modal-in 200ms ease-out; }
+.dialog-panel-out { animation: modal-out 160ms ease-in forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog-backdrop-in,
+  .dialog-backdrop-out,
+  .dialog-panel-in,
+  .dialog-panel-out {
     animation: none;
   }
 }

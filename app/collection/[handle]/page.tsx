@@ -13,7 +13,12 @@ export default async function CollectionDetailPage({
   params: Promise<{ handle: string }>;
 }) {
   const { handle } = await params;
-  const collection = await getCollectionByHandle(handle);
+  // Same degradation as /shop and /collection: a Shopify outage renders the
+  // 404 boundary, never a 500; the 5-minute revalidation self-heals.
+  const collection = await getCollectionByHandle(handle).catch((error) => {
+    console.error('[collection detail] catalog read failed:', error);
+    return null;
+  });
   if (!collection) notFound();
 
   return (
