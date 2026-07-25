@@ -20,14 +20,14 @@ const inter = Inter({
 export const metadata: Metadata = {
   metadataBase: new URL('https://wearapeiron.com'),
   title: {
-    default: 'Apeiron - Balance of Street & Luxury',
+    default: 'Apeiron Official Website',
     template: '%s | Apeiron',
   },
   description: 'Heavyweight essentials, built to outlast the trend cycle. Shipped from New York.',
   openGraph: {
     type: 'website',
     siteName: 'Apeiron',
-    title: 'Apeiron - Balance of Street & Luxury',
+    title: 'Apeiron Official Website',
     description: 'Heavyweight essentials, built to outlast the trend cycle. Shipped from New York.',
     images: [
       {
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Apeiron - Balance of Street & Luxury',
+    title: 'Apeiron Official Website',
     description: 'Heavyweight essentials, built to outlast the trend cycle. Shipped from New York.',
   },
 };
