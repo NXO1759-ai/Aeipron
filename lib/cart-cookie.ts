@@ -23,8 +23,18 @@
 import 'server-only';
 import { cookies } from 'next/headers';
 
-/** The HTTP-only cookie name holding the opaque Shopify cart id. */
-export const CART_COOKIE = 'apeiron-cart-id';
+/**
+ * The HTTP-only cookie name holding the opaque Shopify cart id.
+ *
+ * In production the `__Host-` prefix is used: browsers then require Secure +
+ * path=/ + no Domain attribute, which blocks cookie injection from sibling
+ * subdomains (e.g. a compromised blog/landing host can no longer overwrite the
+ * cart id). The prefix is impossible to satisfy over plain HTTP, so
+ * non-production environments keep the plain name (dev carts must still work
+ * on http://localhost).
+ */
+export const CART_COOKIE =
+  process.env.NODE_ENV === 'production' ? '__Host-apeiron-cart-id' : 'apeiron-cart-id';
 
 /** Cookie lifetime: 14 days, in seconds. */
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 14;

@@ -83,18 +83,14 @@ export function ShippingProtection({ active }: { active: boolean }) {
   );
 
   // Fetch a fresh quote while visible (drawer open / cart page mounted) and
-  // the lines change. The state write happens asynchronously, keyed to the
-  // lines it was issued for.
+  // the lines change. The action derives lines + prices from the authoritative
+  // server-side cart — the client sends nothing but the request itself (the
+  // browser never sends a price). The state write happens asynchronously,
+  // keyed to the lines it was issued for.
   useEffect(() => {
     if (!active || merchandiseLines.length === 0) return;
     let cancelled = false;
-    getShippingProtectionQuote({
-      lines: merchandiseLines.map((l) => ({
-        merchandiseId: l.merchandiseId,
-        price: l.price,
-        quantity: l.quantity,
-      })),
-    }).then((fresh) => {
+    getShippingProtectionQuote().then((fresh) => {
       if (cancelled) return;
       setAvailable(fresh !== null);
       if (fresh) setQuote({ key: quoteKey, variantId: fresh.variantId, price: fresh.price });
