@@ -1,173 +1,119 @@
-# Aeipron — Headless Shopify Storefront
+# Apeiron — Headless Shopify Storefront
 
-A production-ready Next.js headless ecommerce storefront powered by the Shopify Storefront API. The frontend is built with Next.js 15 (App Router), React 19, TypeScript (strict), Tailwind CSS v4, and Zustand. Product data, collections, variants, pricing, and images are all sourced from Shopify — no mock data on the product-facing pages.
+A headless Shopify storefront for the Apeiron clothing brand (wearapeiron.com),
+built with Next.js (App Router) + Tailwind CSS. Source of truth for products,
+cart, and checkout is the Shopify Storefront API.
 
-## Tech stack
+## Stack
 
-| Layer | Technology |
-|---|---|
-| Framework | Next.js 15 (App Router, Server Components) |
-| UI | React 19, Tailwind CSS v4 |
-| Language | TypeScript (strict mode) |
-| State | Zustand (cart — transitioning to Shopify Cart API) |
-| Ecommerce | Shopify Storefront API (GraphQL, `2025-07` version) |
-| Deployment | Vercel (standalone output) |
+- **Next.js 15.5** — App Router, ISR (5-minute revalidation on catalog routes),
+  Server Actions, `output: 'standalone'`
+- **React 19**, **Tailwind CSS 4**, **motion** (compositor-only animation),
+  **zustand** (optimistic cart store), **zod** (input validation)
+- **Shopify Storefront API** (catalog, cart) + **Shopify Admin API**
+  (contact-message metaobjects, least-privilege scope)
+- **Judge.me** (product reviews), **Navidium** (shipping protection),
+  **Resend or vendored SMTP** (contact-form delivery)
+- TypeScript, ESLint (`eslint-config-next`, aligned with the framework version),
+  Vitest (unit + integration tests, `tests/`)
 
-## Features
+## Architecture
 
-- **Shopify-backed product catalog** — products, variants, pricing, and images fetched from the Shopify Storefront API
-- **Collection pages** — browse collections (categories) at `/collection`, drill into a specific collection at `/collection/[handle]`
-- **Product detail pages** — image gallery, description, multi-dimension variant selectors (Size, Color, etc.) with in-stock/out-of-stock states
-- **404 boundaries** — unknown product handles and collection handles render branded not-found pages
-- **Server-only data layer** — the Shopify access token never reaches the browser bundle (enforced by `server-only` package + `import 'server-only'`)
-- **Responsive design** — mobile-first grid that stacks to one column on small screens
+- **Catalog** (`/shop`, `/collection`, `/product/[slug]`): ISR with
+  `revalidate = 300`. Pageviews don't hit Shopify live; a Shopify outage serves
+  the last good render. Catalog reads degrade to an empty state rather than
+  failing the build when Shopify is unreachable at build time.
+- **Cart**: optimistic zustand cache reconciled against authoritative Shopify
+  carts via Server Actions (`app/cart/actions.ts`). The cart id lives in an
+  HTTP-only cookie (`__Host-` prefixed in production). Orphaned Navidium
+  protection lines are swept server-side.
+- **Checkout**: Shopify hosted checkout (redirect from the cart drawer). A
+  custom `/checkout` flow exists but is dormant.
+- **Shipping protection** (Navidium): quotes are priced **from the server-side
+  cart** (`app/cart/protection.ts`) — see trust invariants below.
+- **Reviews** (Judge.me): shop-wide review index fetched server-side
+  (page 1, then remaining pages concurrently), filtered per product, cached
+  5 minutes. Failure hides the section — never a page error.
+- **Contact**: honeypot + time-trap + zod validation, dual delivery (Resend
+  API or the vendored TLS-only SMTP client) plus a Shopify Admin metaobject
+  record. SMTP headers are CRLF-stripped; the subject is RFC 2047 encoded.
+- **Legal/help**: Shopify page content rendered through a whitelist HTML
+  parser (no `dangerouslySetInnerHTML`); help content falls back to bundled
+  copy when Shopify is unreachable.
+- **Scroll performance**: the only scroll-linked animation (home hero
+  parallax) is gated OFF on touch devices (`useCoarsePointer`) — a
+  full-viewport CSS-filtered image being translated per scroll frame is the
+  classic mobile jank source. Below-fold sections use `content-visibility:
+  auto` (`.cv-auto`); fixed chrome stays opaque (no backdrop blur over
+  scrolling content).
 
-## Project structure
+## Trust invariants (do not break)
 
-```
-app/
-  collection/              # Collections index + collection detail pages
-    [handle]/              # Specific collection page (e.g. /collection/shirts)
-    page.tsx               # Collections index (/collection)
-  product/
-    [slug]/                # Product detail page (slug = Shopify product handle)
-    ProductClient.tsx      # Client component for variant selection + add to bag
-  checkout/                # Checkout page (mock — Phase 3 will wire to Shopify cart)
-  collaborators/            # Organizer/collaborator pages (mock — Phase 4)
-  story/                   # Brand story page
-  layout.tsx               # Root layout (fonts, metadata)
-  page.tsx                 # Home page (hero)
-components/                # Header, Footer, CartDrawer, LayoutWrapper
-hooks/                     # use-hydrated, use-mobile
-lib/
-  shopify/                 # Shopify integration layer (server-only)
-    client.ts              # GraphQL fetcher (Node https, IPv4)
-    queries.ts             # GraphQL operation strings
-    adapter.ts             # Shopify response → domain types mapper
-    types.ts               # Raw Shopify response shapes
-  catalog.ts              # Public read API (getCollections, getProductBySlug, etc.)
-  types.ts                # Domain types (Product, ProductOption, Collection, etc.)
-  utils.ts                # cn() class merge utility
-store/                     # Zustand cart store (mock — Phase 2 will wire to Shopify cart)
-```
+1. **The browser never sends a price.** Cart mutations send only
+   `merchandiseId` + `quantity`; the Navidium tier is computed from the
+   server-side cart's Shopify prices. Anything money-adjacent is derived
+   server-side.
+2. **Server tokens never cross to the client.** Storefront/Admin/Judge.me/
+   Resend/SMTP secrets are read only in `lib/` server modules (guarded by the
+   `server-only` package where applicable).
+3. **Failures degrade, they don't throw.** Reviews, protection, email, and
+   help content all resolve to hidden/empty states on third-party failure.
 
-## Getting started
+## Security
 
-### Prerequisites
+- **HTTP security headers** set in `next.config.ts` (HSTS, `X-Frame-Options:
+  DENY`, `nosniff`, Referrer-Policy, Permissions-Policy, and a **report-only**
+  CSP — flip `Content-Security-Policy-Report-Only` to enforced after one clean
+  deploy cycle).
+- **Rate limiting** is enforced at the edge (Cloudflare, in front of the
+  Node server). Recommended WAF rules:
+  - `POST /contact` (Server Action submissions): **10 requests/minute/IP**
+  - Server Action mutations on `/cart`, `/shop`, `/product/*`, `/checkout`:
+    **60 requests/minute/IP**
+  Server Actions are POST requests to the page URL with the `Next-Action`
+  header — scope the rules on that header to avoid throttling plain browsing.
+- **Dependency CVE gate**: CI runs `npm audit --omit=dev --audit-level=high`.
+  Keep Next.js current — Server Actions are this app's mutation surface.
 
-- **Node.js 20+** (tested on v20.20.2)
-- A **Shopify store** with:
-  - At least one product with variants (e.g. Size: Small/Medium/Large) and images
-  - At least one Collection (e.g. "Shirts") containing products
-  - A **custom app** with Storefront API access enabled
+## Environment variables
 
-### Shopify setup
+Server-side only — never expose them via `NEXT_PUBLIC_`. See `.env.example`
+for the annotated template.
 
-1. Go to **Shopify Admin → Settings → Apps and sales channels → Develop apps**.
-2. Create or open your custom app.
-3. Under **Configuration → Storefront API integration**, select these scopes:
-   - `unauthenticated_read_product_listings`
-   - `unauthenticated_read_product_inventory`
-   - `unauthenticated_read_metaobjects`
-4. Copy the **Storefront API access token** (NOT the Admin API access token — they're different strings even though both start with `shpat_`).
-5. If the "Storefront API integration" section is not visible, create a public Storefront access token via the Admin API's `storefrontAccessTokenCreate` mutation.
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `SHOPIFY_STORE_DOMAIN` | Yes | e.g. `your-store.myshopify.com` |
+| `SHOPIFY_STOREFRONT_API_TOKEN` | Yes | Storefront API public token |
+| `SHOPIFY_ADMIN_API_TOKEN` | Contact only | Admin API token, `write_metaobjects` scope only |
+| `SHOPIFY_API_VERSION` | No | Defaults to `2026-01` |
+| `NAVIDIUM_API_URL` | Protection only | Navidium quote lambda URL |
+| `JUDGE_ME_API_TOKEN` | Reviews only | Judge.me private token |
+| `RESEND_API_KEY` | Contact (option A) | Resend delivery |
+| `SMTP_URL` | Contact (option B) | `smtps://user:pass@host:465` — vendored TLS-only client |
+| `CONTACT_INBOX` | Contact | Destination inbox |
 
-### Environment variables
-
-Create a `.env.local` file in the project root:
-
-```bash
-SHOPIFY_STORE_DOMAIN=your-store.myshopify.com
-SHOPIFY_STOREFRONT_ACCESS_TOKEN=your_storefront_access_token
-SHOPIFY_API_VERSION=2025-07
-```
-
-> **Important:** These variables are server-only. Never prefix them with `NEXT_PUBLIC_` — that would expose the token to the browser. For Vercel deployment, set the same variables in Project Settings → Environment Variables.
-
-A `.env.example` file with placeholder values is included in the repo.
-
-### Install and run
-
-```bash
-npm install
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000).
-
-### Install note
-
-If you encounter peer dependency conflicts between `eslint-config-next` and `next`, install with:
+## Development
 
 ```bash
-npm install --legacy-peer-deps
+npm ci
+npm run dev        # http://localhost:3000
+npm run lint
+npm test           # vitest
+npx tsc --noEmit
 ```
 
-This is a known issue with `eslint-config-next@16` and `next@15` version skew.
+Builds tolerate missing Shopify env vars (catalog routes render their empty
+state at build time and self-heal on the next revalidation), so CI and sandbox
+builds work without secrets.
 
-## Commands
+## CI
 
-| Command | Description |
-|---|---|
-| `npm run dev` | Start the dev server |
-| `npm run build` | Production build (typechecks + lints + compiles) |
-| `npm run start` | Serve the standalone production build |
-| `npm run lint` | Run ESLint |
-| `npm run clean` | Clear the `.next/` cache |
+`.github/workflows/ci.yml` runs on every push/PR: `npm ci` → typecheck → lint
+→ tests → `npm audit --omit=dev --audit-level=high`.
 
-`npm run build` is the primary verification gate — it runs both typecheck and lint with `ignoreBuildErrors: false` and `ignoreDuringBuilds: false`.
+## Deployment
 
-## Architecture notes
-
-### Server-only Shopify client
-
-All Shopify API calls go through `lib/shopify/client.ts`, which is marked server-only via `import 'server-only'`. Any attempt to import it from a client component will fail at build time. The client uses Node's built-in `https` module (not `fetch`) to force IPv4 connections, avoiding `ETIMEDOUT` issues in environments where IPv6 resolution times out.
-
-### Product reads are dynamic
-
-Product and collection pages use `export const dynamic = 'force-dynamic'` — they render on-demand at request time (not statically prerendered at build time). This is necessary because Shopify reads are network calls. ISR caching (`revalidate = 60`) will be added in Phase 6 for production performance.
-
-### Variant GID on ProductOptionValue
-
-Each `ProductOptionValue` carries a `variantId` field (the Shopify `ProductVariant` GID). This is preparation for Phase 2 (cart mutations), where the cart will need the variant GID to call `cartCreate` / `cartLinesAdd`. The product selector (`ProductClient.tsx`) already passes the selected variant's GID when adding to bag.
-
-### Image handling
-
-Product images come from Shopify's CDN (`cdn.shopify.com`), which is allow-listed in `next.config.ts` `remotePatterns`. In development, image optimization is disabled (`unoptimized: true` in dev) to avoid network issues in sandbox environments. In production on Vercel, the optimizer is active.
-
-## Current status
-
-### What's Shopify-backed (Phase 1 complete)
-- `/collection` — lists all Shopify Collections
-- `/collection/[handle]` — products in a specific Shopify Collection
-- `/product/[slug]` — product detail with variants, images, pricing from Shopify
-
-### What's still mock-backed (Phases 2–4)
-- Cart (`store/use-cart.ts`) — local Zustand store, not yet wired to Shopify Cart API
-- Checkout (`app/checkout/`) — mock server action, not yet redirecting to Shopify's hosted checkout
-- Collaborators (`app/collaborators/`) — mock organizer data, not yet wired to Shopify Metaobjects
-
-See `docs/IMPLEMENTATION_PLAN.md` for the full 6-phase plan.
-
-## Documentation
-
-| File | Purpose |
-|---|---|
-| `docs/JOB.md` | Client requirements and project objectives |
-| `docs/SHOPIFY_API.md` | Shopify Storefront API reference (operations, scopes, cart flow, deprecated fields) |
-| `docs/IMPLEMENTATION_PLAN.md` | 6-phase build plan with exit criteria |
-| `docs/PHASE_1_TASKS.md` | Phase 1 task breakdown (10 tasks, all complete) |
-| `docs/PROGRESS.md` | Development progress audit trail |
-
-## Git configuration
-
-This repo uses a local git config (not global) with:
-- `user.name` = `bytebards`
-- `user.email` = `bilalqureshi7358@gmail.com`
-- `remote.origin.url` = `git@github-bilal:NXO1759-ai/Aeipron.git` (via `github-bilal` SSH host)
-
-Do not override the local config or switch the remote to HTTPS.
-
-## License
-
-Proprietary. All rights reserved.
+Standalone Node server (`output: 'standalone'`) behind Cloudflare. Run with
+`NODE_ENV=production` so the image optimizer (sharp) and the `__Host-` cart
+cookie are active. Set the env vars above; apply the Cloudflare WAF rate-limit
+rules before opening real traffic.

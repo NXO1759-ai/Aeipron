@@ -21,8 +21,8 @@ export default function StoryPage() {
         <div className="absolute inset-0 w-full h-full z-0">
           <div className="absolute inset-0 bg-[#0a0a0a]/60 z-10" />
           <Image 
-            src="https://picsum.photos/seed/guitarheadstock/1920/1080"
-            alt="Cinematic macro shot of a guitar headstock"
+            src="/home/hero.jpg"
+            alt="Macro photograph of the hood and drawstrings of a black heavyweight loopback terry hoodie"
             fill
             priority
             className="object-cover contrast-125 brightness-[0.6]"
@@ -51,7 +51,7 @@ export default function StoryPage() {
       </section>
 
       {/* Section 2: The Origin (Split-Pane Layout) */}
-      <section className="px-4 md:px-12 py-24 md:py-32 border-t border-neutral-800">
+      <section className="cv-auto px-4 md:px-12 py-24 md:py-32 border-t border-neutral-800">
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-24 items-center">
           <motion.div
             initial="hidden"
@@ -74,8 +74,8 @@ export default function StoryPage() {
             className="relative aspect-[3/4] md:aspect-[4/5] bg-neutral-900 overflow-hidden"
           >
             <Image
-              src="https://picsum.photos/seed/storyorigin/1200/1600"
-              alt="16mm cinematic macro-shot of a garment"
+              src="/home/fit.jpg"
+              alt="Hooded figure against a dark concrete wall, showing the boxy structured fit of the black hoodie"
               fill
               sizes="(min-width: 768px) 50vw, 100vw"
               className="object-cover contrast-125 brightness-75"
@@ -85,7 +85,7 @@ export default function StoryPage() {
       </section>
 
       {/* Section 3: The Craftsmanship (Text-Heavy / Editorial Block) */}
-      <section className="px-4 py-24 md:py-48 border-t border-neutral-800">
+      <section className="cv-auto px-4 py-24 md:py-48 border-t border-neutral-800">
         <motion.div
           initial="hidden"
           whileInView="visible"
@@ -103,7 +103,7 @@ export default function StoryPage() {
       </section>
 
       {/* Section 4: The Philosophy (Footer/Closing Anchor) */}
-      <section className="px-4 py-24 md:py-32 border-t border-neutral-800 flex flex-col items-center text-center">
+      <section className="cv-auto px-4 py-24 md:py-32 border-t border-neutral-800 flex flex-col items-center text-center">
         <motion.div
           initial="hidden"
           whileInView="visible"

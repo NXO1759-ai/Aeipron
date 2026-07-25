@@ -129,10 +129,26 @@ export async function getProductReviewData(productHandle: string): Promise<Produ
     return EMPTY_DATA;
   }
 
+  // Page 1 first (it alone tells us total_pages), then the remaining pages
+  // CONCURRENTLY — the sequential page-at-a-time loop made every product page
+  // pay up to MAX_PAGES round-trips of latency for no reason. Any page
+  // failing still resolves to the empty state (never a page error).
+  const first = await fetchPage(shopDomain, token, 1);
+  if (!first) return EMPTY_DATA;
+  const totalPages = Math.min(
+    typeof first.total_pages === 'number' && first.total_pages > 0 ? first.total_pages : 1,
+    MAX_PAGES,
+  );
+  const rest =
+    totalPages > 1
+      ? await Promise.all(
+          Array.from({ length: totalPages - 1 }, (_, i) => fetchPage(shopDomain, token, i + 2)),
+        )
+      : [];
+  if (rest.some((data) => data === null)) return EMPTY_DATA;
+
   const collected: ProductReview[] = [];
-  for (let page = 1; page <= MAX_PAGES; page += 1) {
-    const data = await fetchPage(shopDomain, token, page);
-    if (!data) return EMPTY_DATA;
+  for (const data of [first, ...(rest as JudgeMeApiPage[])]) {
     const batch = Array.isArray(data.reviews) ? data.reviews : [];
     for (const raw of batch) {
       if (raw.product_handle !== productHandle) continue;
@@ -145,8 +161,6 @@ export async function getProductReviewData(productHandle: string): Promise<Produ
         createdAt: raw.created_at ?? '',
       });
     }
-    const totalPages = typeof data.total_pages === 'number' ? data.total_pages : 1;
-    if (page >= totalPages) break;
   }
 
   // Best-first ordering for the Details pop-up: 5★ → 1★, newest first within

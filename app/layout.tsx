@@ -18,8 +18,29 @@ const inter = Inter({
 // brand "A" tile, generated at runtime) — never from a hot-linked CDN file
 // that can rot into someone else's logo.
 export const metadata: Metadata = {
-  title: 'Apeiron - Balance of Street & Luxury',
+  metadataBase: new URL('https://wearapeiron.com'),
+  title: {
+    default: 'Apeiron - Balance of Street & Luxury',
+    template: '%s | Apeiron',
+  },
   description: 'Heavyweight essentials, built to outlast the trend cycle. Shipped from New York.',
+  openGraph: {
+    type: 'website',
+    siteName: 'Apeiron',
+    title: 'Apeiron - Balance of Street & Luxury',
+    description: 'Heavyweight essentials, built to outlast the trend cycle. Shipped from New York.',
+    images: [
+      {
+        url: '/home/hero.jpg',
+        alt: 'Macro photograph of the hood and drawstrings of a black heavyweight loopback terry hoodie',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Apeiron - Balance of Street & Luxury',
+    description: 'Heavyweight essentials, built to outlast the trend cycle. Shipped from New York.',
+  },
 };
 
 export default function RootLayout({children}: {children: React.ReactNode}) {

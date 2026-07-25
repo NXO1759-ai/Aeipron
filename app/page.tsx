@@ -1,9 +1,8 @@
-'use client';
-
-import { useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { motion, useReducedMotion, useScroll, useTransform } from 'motion/react';
+
+import { FadeIn } from '@/components/home/FadeIn';
+import { Hero } from '@/components/home/Hero';
 
 // ---------------------------------------------------------------------------
 // Home — the editorial chapter scroll.
@@ -13,24 +12,16 @@ import { motion, useReducedMotion, useScroll, useTransform } from 'motion/react'
 // construction, fit — ending on the buy action. Copy is grounded in /story
 // ("beyond the trend", "infrastructure for your day", "quiet confidence").
 //
+// This is a SERVER component: all copy, imagery, and links render on the
+// server, and only the two interactive pieces hydrate as client islands —
+// components/home/Hero (scroll parallax + settle zoom) and
+// components/home/FadeIn (whileInView fade/rise, once per section, the same
+// variant as /story). Motion stays compositor-only (transform/opacity) and
+// disabled under prefers-reduced-motion, exactly as before the split.
+//
 // Imagery: /home/*.jpg in public/. Photography is uploaded to the repo
 // directly (binary) — see the PR for the one-time upload step.
-//
-// Motion follows the storefront's discipline: whileInView fade/rise once per
-// section (the same variant as /story), a subtle scroll parallax + settle
-// zoom on the hero only, everything compositor-only (transform/opacity) and
-// disabled under prefers-reduced-motion. The footer renders on home now
-// (LayoutWrapper), so the page ends in standard chrome.
 // ---------------------------------------------------------------------------
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 16 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 1, ease: [0.25, 1, 0.5, 1] as const },
-  },
-};
 
 type Chapter = {
   eyebrow: string;
@@ -54,7 +45,7 @@ const CHAPTERS: Chapter[] = [
   {
     eyebrow: '02 / The Construction',
     headline: 'Built, not assembled.',
-    copy: 'French seams throughout. Double-ribbed cuffs that recover their shape. Branding debossed, never printed. If a detail doesn\u2019t make the garment last longer or fit better, it doesn\u2019t make the cut.',
+    copy: 'French seams throughout. Double-ribbed cuffs that recover their shape. Branding debossed, never printed. If a detail doesn’t make the garment last longer or fit better, it doesn’t make the cut.',
     image: '/home/construction.jpg',
     alt: 'Macro photograph of a french seam and double-ribbed cuff on a black heavyweight hoodie',
     imageRight: false,
@@ -71,7 +62,7 @@ const CHAPTERS: Chapter[] = [
 
 function ChapterSection({ chapter }: { chapter: Chapter }) {
   return (
-    <section className="border-t border-ui-concrete/20">
+    <section className="cv-auto border-t border-ui-concrete/20">
       <div className="grid md:grid-cols-2">
         <div
           className={`relative aspect-[4/5] md:aspect-auto md:min-h-[85vh] overflow-hidden ${
@@ -87,19 +78,13 @@ function ChapterSection({ chapter }: { chapter: Chapter }) {
           />
         </div>
         <div className="flex flex-col justify-center px-6 md:px-12 lg:px-20 py-16 md:py-24">
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: '-100px' }}
-            variants={fadeUp}
-            className="max-w-md"
-          >
+          <FadeIn className="max-w-md">
             <p className="text-xs uppercase tracking-widest text-ui-concrete mb-6">{chapter.eyebrow}</p>
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold uppercase tracking-tighter mb-8">
               {chapter.headline}
             </h2>
             <p className="text-sm md:text-base text-ui-concrete leading-relaxed">{chapter.copy}</p>
-          </motion.div>
+          </FadeIn>
         </div>
       </div>
     </section>
@@ -107,72 +92,10 @@ function ChapterSection({ chapter }: { chapter: Chapter }) {
 }
 
 export default function Home() {
-  const reduceMotion = useReducedMotion();
-  const heroRef = useRef<HTMLElement>(null);
-  // Hero parallax: the background drifts up slightly as the page scrolls away.
-  const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
-  const heroY = useTransform(scrollYProgress, [0, 1], ['0%', '12%']);
-
   return (
     <div className="flex flex-col min-h-screen bg-apeiron-black text-apeiron-ivory">
-      {/* Chapter 00: Hero — lvh, NOT dvh: dvh resizes live when the mobile
-          browser chrome collapses on scroll, reflowing the whole hero (and
-          its filtered image) mid-gesture — a visible hitch at scroll start.
-          lvh stays constant, so the first swipe is pure compositor work. */}
-      <section
-        ref={heroRef}
-        className="relative h-[100lvh] w-full flex items-center justify-center overflow-hidden bg-apeiron-black"
-      >
-        <motion.div
-          className="absolute inset-0 w-full h-full"
-          style={reduceMotion ? undefined : { y: heroY }}
-        >
-          <div className="absolute inset-0 bg-apeiron-black/40 z-10" />
-          <motion.div
-            className="absolute inset-0"
-            initial={reduceMotion ? undefined : { scale: 1.06 }}
-            animate={reduceMotion ? undefined : { scale: 1 }}
-            transition={{ duration: 2.4, ease: [0.25, 1, 0.5, 1] }}
-          >
-            <Image
-              src="/home/hero.jpg"
-              alt="Macro photograph of the hood and drawstrings of a black heavyweight loopback terry hoodie"
-              fill
-              priority
-              sizes="100vw"
-              className="object-cover contrast-125 brightness-[0.6]"
-            />
-          </motion.div>
-        </motion.div>
-
-        <div className="relative z-20 flex flex-col items-center text-center px-4 w-full">
-          <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={fadeUp}
-            className="flex flex-col items-center"
-          >
-            <h1 className="font-inter text-5xl md:text-7xl lg:text-9xl font-medium text-apeiron-ivory uppercase tracking-tighter mb-6 drop-shadow-2xl">
-              Everyday Mastery
-            </h1>
-            <p className="text-sm md:text-base text-apeiron-ivory/70 tracking-wide mb-12 max-w-md">
-              Heavyweight essentials, built to outlast the trend cycle.
-            </p>
-            <Link
-              href="/shop"
-              className="bg-transparent border border-apeiron-ivory text-apeiron-ivory px-12 py-5 uppercase tracking-widest font-bold text-sm transition-all duration-[600ms] ease-[cubic-bezier(0.25,1,0.5,1)] hover:bg-apeiron-ivory hover:text-apeiron-black active:bg-apeiron-ivory active:text-apeiron-black"
-            >
-              Explore The Core
-            </Link>
-          </motion.div>
-        </div>
-
-        {/* Scroll cue */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-3">
-          <span className="text-[10px] uppercase tracking-[0.3em] text-apeiron-ivory/60">Scroll</span>
-          <span className="w-px h-10 bg-apeiron-ivory/40" aria-hidden="true" />
-        </div>
-      </section>
+      {/* Chapter 00: Hero (client island — parallax + settle zoom) */}
+      <Hero />
 
       {/* Chapters 01–03: fabric, construction, fit */}
       {CHAPTERS.map((chapter) => (
@@ -180,14 +103,8 @@ export default function Home() {
       ))}
 
       {/* Chapter 04: the first chapter — the hoodie, with the buy action */}
-      <section className="border-t border-ui-concrete/20 px-6 md:px-12 py-24 md:py-32">
-        <motion.div
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: '-100px' }}
-          variants={fadeUp}
-          className="max-w-md mx-auto flex flex-col items-center text-center"
-        >
+      <section className="cv-auto border-t border-ui-concrete/20 px-6 md:px-12 py-24 md:py-32">
+        <FadeIn className="max-w-md mx-auto flex flex-col items-center text-center">
           <p className="text-xs uppercase tracking-widest text-ui-concrete mb-6">04 / The First Chapter</p>
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold uppercase tracking-tighter mb-8">
             We start with the hoodie.
@@ -227,17 +144,12 @@ export default function Home() {
           >
             View everything
           </Link>
-        </motion.div>
+        </FadeIn>
       </section>
 
       {/* Closing anchor */}
-      <section className="border-t border-ui-concrete/20 px-6 py-24 md:py-40 text-center">
-        <motion.div
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: '-100px' }}
-          variants={fadeUp}
-        >
+      <section className="cv-auto border-t border-ui-concrete/20 px-6 py-24 md:py-40 text-center">
+        <FadeIn>
           <h2 className="text-4xl md:text-6xl lg:text-7xl font-medium uppercase tracking-tighter mb-12">
             Beyond
             <br />
@@ -249,7 +161,7 @@ export default function Home() {
           >
             Read our story
           </Link>
-        </motion.div>
+        </FadeIn>
       </section>
     </div>
   );

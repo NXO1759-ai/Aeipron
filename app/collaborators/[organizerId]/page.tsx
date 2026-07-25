@@ -38,10 +38,10 @@ export default async function OrganizerMerchPage({ params }: { params: Promise<{
           {/* Lifestyle Column */}
           <div className="md:col-span-5 space-y-8 md:sticky md:top-24">
             <div className="relative aspect-[4/5] bg-ui-concrete/10">
-              <Image src="https://picsum.photos/seed/chaotic1/800/1000" alt="Lifestyle 1" fill sizes="(min-width: 768px) 40vw, 100vw" className="object-cover" />
+              <Image src="/home/fit.jpg" alt="Hooded figure against a dark concrete wall" fill sizes="(min-width: 768px) 40vw, 100vw" className="object-cover" />
             </div>
             <div className="relative aspect-video bg-ui-concrete/10 hidden md:block">
-              <Image src="https://picsum.photos/seed/chaotic2/1000/562" alt="Lifestyle 2" fill sizes="(min-width: 768px) 40vw, 100vw" className="object-cover contrast-150" />
+              <Image src="/home/fabric.jpg" alt="Macro photograph of black heavyweight loopback terry" fill sizes="(min-width: 768px) 40vw, 100vw" className="object-cover contrast-150" />
             </div>
           </div>
 

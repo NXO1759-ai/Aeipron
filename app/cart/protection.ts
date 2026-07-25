@@ -2,26 +2,27 @@
 
 // ---------------------------------------------------------------------------
 // Cart shipping-protection server action — the ONLY way the client requests a
-// Navidium quote. Validates the merchandise lines server-side (never trust the
-// client), derives the tier total, and delegates to the Navidium client
-// (lib/navidium.ts). Returns null on any invalid input or quote failure — the
-// toggle then stays hidden; this action never throws into the drawer.
+// Navidium quote.
+//
+// TRUST INVARIANT (shared with app/cart/actions.ts): the browser NEVER sends a
+// price. The quote's tier total and item prices are derived from the
+// AUTHORITATIVE server-side cart (Shopify is the price source of truth), never
+// from the request payload — a crafted request cannot talk the tier down.
+// The client may only pass an optional country override.
+//
+// Returns null on any failure (no cart, empty merchandise, quote failure) —
+// the toggle then stays hidden; this action never throws into the drawer.
 // ---------------------------------------------------------------------------
 
+import { getCart } from '@/app/cart/actions';
 import { getProtectionQuote, type ProtectionQuote } from '@/lib/navidium';
-
-/** Hard cap so a crafted payload can never make the quote request unbounded. */
-const MAX_LINES = 250;
-
-/** One merchandise line the drawer quotes on (protection line excluded). */
-export interface ProtectionQuoteLine {
-  merchandiseId: string;
-  price: number;
-  quantity: number;
-}
+import { merchandiseLinesOf } from '@/lib/protection';
 
 export interface ProtectionQuoteRequest {
-  lines: ProtectionQuoteLine[];
+  /**
+   * Optional shipping-country override for Navidium's rules. Everything that
+   * affects MONEY (lines, prices, tier total) comes from the server cart.
+   */
   countryName?: string;
 }
 
@@ -32,32 +33,29 @@ function numericIdFromGid(merchandiseId: string): string {
 }
 
 /**
- * Quote shipping protection for the current merchandise lines. The tier price
- * depends only on the cart total, but the full item list is forwarded so
- * Navidium can apply any product-level rules on its side.
+ * Quote shipping protection for the caller's current cart. The merchandise
+ * lines and their prices are read from the server-side Shopify cart (via the
+ * HTTP-only cart cookie), so the tier always reflects what is actually in the
+ * bag. The tier price depends only on the merchandise subtotal, but the full
+ * item list is forwarded so Navidium can apply any product-level rules.
  */
 export async function getShippingProtectionQuote(
-  input: ProtectionQuoteRequest,
+  input?: ProtectionQuoteRequest,
 ): Promise<ProtectionQuote | null> {
-  const lines = input?.lines;
-  if (!Array.isArray(lines) || lines.length === 0 || lines.length > MAX_LINES) {
-    console.error('[navidium] invalid line count for protection quote');
+  // The authoritative cart. getCart() returns null when there is no cart
+  // cookie or the cart has expired; a Shopify transport failure throws, which
+  // also resolves to "no quote" here — the toggle stays hidden either way.
+  let cart: Awaited<ReturnType<typeof getCart>>;
+  try {
+    cart = await getCart();
+  } catch {
+    console.error('[navidium] cart read failed while quoting protection');
     return null;
   }
-  for (const line of lines) {
-    const valid =
-      line &&
-      typeof line.merchandiseId === 'string' &&
-      line.merchandiseId.length > 0 &&
-      Number.isFinite(line.price) &&
-      line.price >= 0 &&
-      Number.isInteger(line.quantity) &&
-      line.quantity > 0;
-    if (!valid) {
-      console.error('[navidium] invalid merchandise line in protection quote request');
-      return null;
-    }
-  }
+  if (!cart) return null;
+
+  const lines = merchandiseLinesOf(cart.lines);
+  if (lines.length === 0) return null;
 
   // Round to cents — floating-point sums like 19.99*3 must not drift the tier.
   const totalPrice =
@@ -70,6 +68,6 @@ export async function getShippingProtectionQuote(
       price: line.price,
       quantity: line.quantity,
     })),
-    countryName: typeof input.countryName === 'string' ? input.countryName : undefined,
+    countryName: typeof input?.countryName === 'string' ? input.countryName : undefined,
   });
 }

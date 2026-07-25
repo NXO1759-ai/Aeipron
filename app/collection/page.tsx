@@ -1,12 +1,20 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { getCollections } from '@/lib/catalog';
+import type { CollectionSummary } from '@/lib/types';
 
-// Shopify reads are network calls — don't prerender at build time.
-export const dynamic = 'force-dynamic';
+// ISR: cached page, revalidated every 5 minutes (see app/shop/page.tsx for the
+// rationale). Prerendered at build time, so the read degrades to the empty
+// state rather than failing the build when Shopify is unreachable.
+export const revalidate = 300;
 
 export default async function CollectionPage() {
-  const collections = await getCollections();
+  let collections: CollectionSummary[] = [];
+  try {
+    collections = await getCollections();
+  } catch (error) {
+    console.error('[collection] catalog read failed:', error);
+  }
 
   return (
     <div className="min-h-screen bg-apeiron-black text-apeiron-ivory pb-24">

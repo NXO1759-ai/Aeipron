@@ -1,10 +1,37 @@
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getProductBySlug } from '@/lib/catalog';
 import { getProductReviewData } from '@/lib/judge-me';
 import { ProductExperience } from './ProductExperience';
 
-// Shopify reads are network calls — don't prerender at build time.
-export const dynamic = 'force-dynamic';
+// ISR: serve a cached page and revalidate in the background every 5 minutes.
+// Product/price changes appear within one window; a Shopify outage serves the
+// last good render instead of the error boundary. Slugs are rendered on-demand
+// (no generateStaticParams), so nothing calls Shopify at build time.
+export const revalidate = 300;
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  // React cache() in lib/catalog dedupes this with the page render's read.
+  const product = await getProductBySlug(slug);
+  if (!product) return {};
+  const description =
+    product.description.replace(/\s+/g, ' ').trim().slice(0, 160) ||
+    `${product.name} — heavyweight essentials by Apeiron.`;
+  return {
+    title: product.name,
+    description,
+    openGraph: {
+      title: product.name,
+      description,
+      images: product.images.length > 0 ? [{ url: product.images[0], alt: product.name }] : undefined,
+    },
+  };
+}
 
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;

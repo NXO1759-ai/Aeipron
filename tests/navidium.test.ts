@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { Cart, CartLine } from '../lib/types';
 
 // ---------------------------------------------------------------------------
 // Navidium shipping-protection tests.
@@ -6,14 +7,22 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // lib/navidium.ts (quote client) and app/cart/protection.ts (server action)
 // are covered together: env configuration, the exact request payload, response
 // validation (numeric variant id, finite price), the never-throws contract,
-// and the action's input validation + tier-total arithmetic. `fetch` is mocked
-// so nothing hits the network.
+// and the action's server-side pricing (lines/prices come from the mocked
+// server cart — never from the request). `fetch` is mocked so nothing hits
+// the network.
 // ---------------------------------------------------------------------------
 
 vi.mock('server-only', () => ({}));
 
+// The quote action derives lines + prices from the AUTHORITATIVE server-side
+// cart (trust invariant: the browser never sends a price). The cart actions
+// module is mocked so each test controls the cart the action sees.
+vi.mock('@/app/cart/actions', () => ({ getCart: vi.fn() }));
+
 const { getProtectionQuote } = await import('@/lib/navidium');
 const { getShippingProtectionQuote } = await import('@/app/cart/protection');
+const { getCart } = await import('@/app/cart/actions');
+const getCartMock = vi.mocked(getCart);
 
 const LAMBDA = 'https://example.lambda-url.us-east-1.on.aws';
 const mockFetch = vi.fn();
@@ -44,6 +53,7 @@ beforeEach(() => {
   mockFetch.mockReset();
   mockFetch.mockResolvedValue(quoteResponse());
   vi.stubGlobal('fetch', mockFetch);
+  getCartMock.mockReset();
 });
 
 afterEach(() => {
@@ -130,42 +140,83 @@ describe('getProtectionQuote — response handling', () => {
   });
 });
 
-describe('getShippingProtectionQuote — action validation', () => {
-  const lines = [
-    { merchandiseId: 'gid://shopify/ProductVariant/46569521709253', price: 30, quantity: 1 },
-  ];
+describe('getShippingProtectionQuote — server-side cart pricing', () => {
+  const line = (overrides: Partial<CartLine>): CartLine => ({
+    lineId: 'gid://shopify/CartLine/1',
+    merchandiseId: 'gid://shopify/ProductVariant/111',
+    name: 'The Heavyweight Hoodie',
+    productHandle: 'hoodie',
+    price: 150,
+    variantLabel: 'Black / large',
+    quantity: 1,
+    image: '',
+    currencyCode: 'USD',
+    ...overrides,
+  });
 
-  it('computes the tier total and maps GIDs to numeric product ids', async () => {
-    const quote = await getShippingProtectionQuote({
-      lines: [
-        { merchandiseId: 'gid://shopify/ProductVariant/111', price: 19.99, quantity: 3 },
-        { merchandiseId: 'gid://shopify/ProductVariant/222', price: 0.01, quantity: 1 },
-      ],
-    });
+  const cartWith = (lines: CartLine[]): Cart => ({
+    totalQuantity: lines.reduce((acc, l) => acc + l.quantity, 0),
+    checkoutUrl: 'https://shop.example/checkout',
+    subtotalAmount: 0,
+    totalAmount: 0,
+    totalAmountEstimated: false,
+    currencyCode: 'USD',
+    lines,
+  });
+
+  it('derives lines and prices from the server cart, excluding the protection line', async () => {
+    getCartMock.mockResolvedValue(
+      cartWith([
+        line({ merchandiseId: 'gid://shopify/ProductVariant/111', price: 19.99, quantity: 3 }),
+        line({ merchandiseId: 'gid://shopify/ProductVariant/222', price: 0.01, quantity: 1 }),
+        // Navidium's own protection line must not count into the tier:
+        line({ name: 'Navidium Shipping Protection', productHandle: 'navidium-shipping-protection', price: 1.5 }),
+      ]),
+    );
+
+    const quote = await getShippingProtectionQuote({ countryName: 'Canada' });
+
     const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
-    // 19.99*3 + 0.01 = 59.98 — rounded to cents, no float drift.
+    // 19.99*3 + 0.01 = 59.98 — from Shopify's prices, protection line excluded,
+    // rounded to cents with no float drift.
     expect(body.total_price).toBe(59.98);
-    expect(body.items[0].product_id).toBe('111');
+    expect(body.country_name).toBe('Canada');
+    expect(body.items).toEqual([
+      { product_id: '111', price: 19.99, quantity: 3 },
+      { product_id: '222', price: 0.01, quantity: 1 },
+    ]);
     expect(quote).not.toBeNull();
   });
 
-  it('rejects invalid lines without calling Navidium', async () => {
-    expect(
-      await getShippingProtectionQuote({ lines: [{ merchandiseId: 'x', price: -1, quantity: 1 }] }),
-    ).toBeNull();
-    expect(
-      await getShippingProtectionQuote({ lines: [{ merchandiseId: 'x', price: 1, quantity: 0 }] }),
-    ).toBeNull();
-    expect(
-      await getShippingProtectionQuote({ lines: [{ merchandiseId: 'x', price: 1, quantity: 1.5 }] }),
-    ).toBeNull();
-    expect(await getShippingProtectionQuote({ lines: [] })).toBeNull();
-    expect(mockFetch).not.toHaveBeenCalled();
+  it('ignores any lines a crafted request tries to inject', async () => {
+    getCartMock.mockResolvedValue(cartWith([line({ price: 300, quantity: 1 })]));
+
+    // A forged payload claiming a near-empty, near-free cart:
+    const forged = {
+      lines: [{ merchandiseId: 'gid://shopify/ProductVariant/1', price: 0.01, quantity: 1 }],
+    } as unknown as Parameters<typeof getShippingProtectionQuote>[0];
+    await getShippingProtectionQuote(forged);
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+    expect(body.total_price).toBe(300); // the SERVER cart's value, not 0.01
+    expect(body.items).toEqual([{ product_id: '111', price: 300, quantity: 1 }]);
   });
 
-  it('rejects an unbounded line count', async () => {
-    const many = Array.from({ length: 251 }, () => lines[0]);
-    expect(await getShippingProtectionQuote({ lines: many })).toBeNull();
+  it('returns null without calling Navidium when there is no usable cart', async () => {
+    getCartMock.mockResolvedValue(null); // no cart cookie / expired cart
+    expect(await getShippingProtectionQuote()).toBeNull();
+
+    getCartMock.mockResolvedValue(cartWith([])); // empty merchandise
+    expect(await getShippingProtectionQuote()).toBeNull();
+
+    getCartMock.mockResolvedValue(
+      cartWith([line({ name: 'Navidium Shipping Protection', productHandle: 'navidium-shipping-protection' })]),
+    ); // protection-only cart
+    expect(await getShippingProtectionQuote()).toBeNull();
+
+    getCartMock.mockRejectedValue(new Error('shopify down')); // transport failure
+    expect(await getShippingProtectionQuote()).toBeNull();
+
     expect(mockFetch).not.toHaveBeenCalled();
   });
 });
