@@ -14,6 +14,7 @@
 // and must not be shipped to the browser bundle.
 // ---------------------------------------------------------------------------
 
+import { cache } from 'react';
 import type { Product, Organizer, CollectionSummary, Collection } from './types';
 import { shopifyRequest } from '@/lib/shopify/client';
 import {
@@ -38,13 +39,15 @@ const ORGANIZERS: Organizer[] = [
   {
     id: 'org-1',
     name: 'Techno Syndicate',
-    image: 'https://picsum.photos/seed/org1/1200/800',
-    heroImage: 'https://picsum.photos/seed/orgmerch/1920/1080',
+    // Local brand photography as placeholders (never a third-party host —
+    // picsum.photos was removed from images.remotePatterns).
+    image: '/home/fabric.jpg',
+    heroImage: '/home/hero.jpg',
     merch: [
-      { id: 'm1', name: 'Techno Syndicate Tour Tee', price: 65, image: 'https://picsum.photos/seed/merch1/600/800', sizes: ['S', 'M', 'L', 'XL'] },
-      { id: 'm2', name: 'Stage Crew Hoodie', price: 150, image: 'https://picsum.photos/seed/merch2/600/800', sizes: ['M', 'L'] },
-      { id: 'm3', name: 'Backstage Pass Lanyard', price: 35, image: 'https://picsum.photos/seed/merch3/600/800', sizes: ['OS'] },
-      { id: 'm4', name: 'Industrial Zip Jacket', price: 210, image: 'https://picsum.photos/seed/merch4/600/800', sizes: ['S', 'M', 'L'] },
+      { id: 'm1', name: 'Techno Syndicate Tour Tee', price: 65, image: '/home/product.jpg', sizes: ['S', 'M', 'L', 'XL'] },
+      { id: 'm2', name: 'Stage Crew Hoodie', price: 150, image: '/home/construction.jpg', sizes: ['M', 'L'] },
+      { id: 'm3', name: 'Backstage Pass Lanyard', price: 35, image: '/home/fit.jpg', sizes: ['OS'] },
+      { id: 'm4', name: 'Industrial Zip Jacket', price: 210, image: '/home/fabric.jpg', sizes: ['S', 'M', 'L'] },
     ],
   },
 ];
@@ -73,13 +76,16 @@ export async function getCollectionByHandle(handle: string): Promise<Collection 
   };
 }
 
-export async function getProductBySlug(slug: string): Promise<Product | null> {
+// Wrapped in React cache(): the PDP calls this twice per render (page +
+// generateMetadata) and the memoization dedupes it to one Shopify round-trip
+// per request/revalidation.
+export const getProductBySlug = cache(async (slug: string): Promise<Product | null> => {
   const data = await shopifyRequest<ShopifyProductByHandleResponse>(
     PRODUCT_BY_HANDLE_QUERY,
     { handle: slug },
   );
   return data.product ? mapProduct(data.product) : null;
-}
+});
 
 // All products for the Shop page. Decoupled from collections so the shop grid
 // shows every available product regardless of how the merchant groups them.

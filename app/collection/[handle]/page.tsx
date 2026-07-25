@@ -3,7 +3,9 @@ import { notFound } from 'next/navigation';
 import { getCollectionByHandle } from '@/lib/catalog';
 import { ProductCard } from '@/components/ProductCard';
 
-export const dynamic = 'force-dynamic';
+// ISR: cached page, revalidated every 5 minutes. Handles render on-demand
+// (no generateStaticParams), so nothing calls Shopify at build time.
+export const revalidate = 300;
 
 export default async function CollectionDetailPage({
   params,

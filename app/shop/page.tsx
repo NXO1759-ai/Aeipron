@@ -1,8 +1,13 @@
 import { getAllProducts } from '@/lib/catalog';
 import { ProductCard } from '@/components/ProductCard';
+import type { Product } from '@/lib/types';
 
-// Shopify reads are network calls — never statically prerendered.
-export const dynamic = 'force-dynamic';
+// ISR: cached page, revalidated every 5 minutes — a pageview no longer costs a
+// live Storefront API round-trip, and a Shopify outage serves the last good
+// render instead of the error boundary. This route IS prerendered at build
+// time, so the catalog read below degrades to the empty state (rather than
+// failing the build) when Shopify is unreachable or env vars are absent.
+export const revalidate = 300;
 
 // ---------------------------------------------------------------------------
 // Shop page — the single product grid for the storefront.
@@ -19,7 +24,15 @@ export const dynamic = 'force-dynamic';
 // ---------------------------------------------------------------------------
 
 export default async function ShopPage() {
-  const products = await getAllProducts();
+  let products: Product[] = [];
+  try {
+    products = await getAllProducts();
+  } catch (error) {
+    // Build-time prerender without Shopify env vars, or a transient Storefront
+    // API failure: render the empty state instead of failing the build/page.
+    // The 5-minute revalidation window self-heals once Shopify answers again.
+    console.error('[shop] catalog read failed:', error);
+  }
 
   return (
     <div className="min-h-screen bg-apeiron-black text-apeiron-ivory pb-24">
