@@ -20,11 +20,13 @@
 //   All copy lives in lib/size-guide.ts (transcribed verbatim from the
 //   brand's size document).
 //
-// TABLES: every table sits inside its OWN overflow-x-auto wrapper, so on a
-// screen too narrow to show every column, the table — and only the table —
-// scrolls horizontally; the surrounding text never moves. The min-w on each
-// table is what engages the scroll on small screens; above it the table just
-// fills its column.
+// TABLES: both tables render inside <CrosshairTable> — an animated row +
+// column crosshair glides to the hovered/tapped cell so shoppers can trace
+// a size across the grid. Each table still sits in its own overflow-x-auto
+// wrapper (inside CrosshairTable), so on a screen too narrow to show every
+// column the table — and only the table — scrolls horizontally, with the
+// crosshair travelling along. The min-w on each table is what engages the
+// scroll on small screens; above it the table just fills its column.
 //
 // The modal is a lightweight accessible dialog, no library: role="dialog" +
 // aria-modal, Escape closes, the backdrop is a real <button> (keyboard-
@@ -35,6 +37,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
+import { CrosshairTable } from '@/components/product/CrosshairTable';
 import {
   BODY_MEASUREMENT_ROWS,
   FIT_NOTES,
@@ -80,9 +83,8 @@ export function SizeGuide() {
         intended relaxed drape.
       </p>
 
-      {/* Garment grid — in its own horizontal-scroll wrapper so only the
-          table scrolls on narrow screens. */}
-      <div className="overflow-x-auto">
+      {/* Garment grid — crosshair tracing + table-only horizontal scroll. */}
+      <CrosshairTable>
         <table className="w-full min-w-[420px] border-collapse text-left">
           <thead>
             <tr>
@@ -112,7 +114,7 @@ export function SizeGuide() {
             ))}
           </tbody>
         </table>
-      </div>
+      </CrosshairTable>
       <p className="mt-3 text-xs text-ui-concrete">{GARMENT_MEASUREMENT_UNIT_NOTE}</p>
 
       {/* How To Measure → body-measurements + fit-notes modal */}
@@ -154,8 +156,8 @@ export function SizeGuide() {
               </button>
             </div>
 
-            {/* Body-chest table — its own horizontal-scroll wrapper */}
-            <div className="overflow-x-auto">
+            {/* Body-chest table — crosshair tracing + table-only scroll */}
+            <CrosshairTable>
               <table className="w-full min-w-[420px] border-collapse text-left">
                 <thead>
                   <tr>
@@ -183,7 +185,7 @@ export function SizeGuide() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </CrosshairTable>
 
             {/* How We Measure */}
             <h3 className={`${HEADING_CLASSES} mt-8 mb-3`}>How We Measure</h3>
