@@ -353,9 +353,10 @@ export function ProductExperience({ product, reviewData }: { product: Product; r
                 rendered by <RichText> (NOT HTML — see components/RichText).
                 Product Sizing is NOT metafield-driven: it renders the
                 structured house size block (components/product/SizeGuide on
-                lib/size-guide data) — the body-measurements table, How We
-                Measure, Fit Notes, and a "How to measure" link that opens the
-                garment-spec modal. The last row, Reviews, pairs the fit scale
+                lib/size-guide data) — the garment-spec grid ("Find Your Size —
+                Body Measurements") plus a "How To Measure" link that opens
+                the modal with the body-chest table, How We Measure and Fit
+                Notes. The last row, Reviews, pairs the fit scale
                 (custom.review json metafield → product.fit) with the Judge.me
                 review data fetched server-side and passed in as props. */}
             <div className="mt-16 space-y-6 border-t border-ui-concrete/20 pt-8">

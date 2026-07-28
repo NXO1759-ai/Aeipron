@@ -1,15 +1,23 @@
 'use client';
 
 // ---------------------------------------------------------------------------
-// SizeGuide — the structured body of the "Product Sizing" disclosure on the
-// PDP (app/product/[slug]/ProductExperience.tsx). Replaces the old
-// metafield-driven rich-text row with the house size block (lib/size-guide):
+// SizeGuide — the structured body of the "Product Sizing" dropdown on the
+// PDP (app/product/[slug]/ProductExperience.tsx). Content placement per the
+// client's corrected spec:
 //
-//   1. Body-measurements table — pick your size by your BODY chest
-//   2. How We Measure — the three measurement definitions
-//   3. Fit Notes — the four fit recommendations
-//   4. "How to measure" link → a modal with the garment-spec grid
-//      ("Find Your Size — Body Measurements" + per-size garment measurements)
+//   PRODUCT SIZING DROPDOWN shows the garment-spec block:
+//     · "Find Your Size — Body Measurements" heading + the 8–12" ease line
+//     · the garment grid (S–XXL: body length HPS, chest pit-to-pit, chest
+//       full circumference, sleeve length from shoulder)
+//     · "All measurements in inches."
+//
+//   "How To Measure" button (each word capitalized) opens a MODAL with:
+//     · the body-chest table (SIZE → chest IN / CM / US alpha / EU equivalent)
+//     · How We Measure — the three measurement definitions
+//     · Fit Notes — the four fit recommendations
+//
+//   All copy lives in lib/size-guide.ts (transcribed verbatim from the
+//   brand's size document).
 //
 // TABLES: every table sits inside its OWN overflow-x-auto wrapper, so on a
 // screen too narrow to show every column, the table — and only the table —
@@ -64,71 +72,62 @@ export function SizeGuide() {
 
   return (
     <div>
-      {/* 1 · Body-measurements table — in its own horizontal-scroll wrapper */}
+      {/* Product Sizing dropdown body — the garment-spec block */}
+      <h3 className={HEADING_CLASSES}>Find Your Size — Body Measurements</h3>
+      <p className="mt-2 mb-6 text-sm text-ui-concrete">
+        Choose by your body chest. This block builds in roughly 8–12&quot; of ease for the
+        intended relaxed drape.
+      </p>
+
+      {/* Garment grid — in its own horizontal-scroll wrapper so only the
+          table scrolls on narrow screens. */}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[420px] border-collapse text-left">
           <thead>
             <tr>
               <th scope="col" className={TABLE_HEAD_CELL}>Size</th>
-              <th scope="col" className={TABLE_HEAD_CELL}>Body chest (in)</th>
-              <th scope="col" className={TABLE_HEAD_CELL}>Body chest (cm)</th>
-              <th scope="col" className={TABLE_HEAD_CELL}>US Alpha</th>
-              <th scope="col" className={TABLE_HEAD_CELL}>EU equivalent</th>
+              {GARMENT_SIZES.map((size) => (
+                <th key={size} scope="col" className={TABLE_HEAD_CELL}>
+                  {size}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {BODY_MEASUREMENT_ROWS.map((row) => (
-              <tr key={row.size}>
+            {GARMENT_MEASUREMENT_ROWS.map((row) => (
+              <tr key={row.label}>
                 <th
                   scope="row"
-                  className="border-b border-ui-concrete/10 py-2.5 pr-4 text-sm font-bold text-primary-cream"
+                  className="border-b border-ui-concrete/10 py-2.5 pr-6 text-[10px] font-bold uppercase tracking-[0.15em] text-ui-concrete"
                 >
-                  {row.size}
+                  {row.label}
                 </th>
-                <td className={TABLE_BODY_CELL}>{row.chestIn}</td>
-                <td className={TABLE_BODY_CELL}>{row.chestCm}</td>
-                <td className={TABLE_BODY_CELL}>{row.usAlpha}</td>
-                <td className={TABLE_BODY_CELL}>{row.euEquivalent}</td>
+                {row.values.map((value, index) => (
+                  <td key={GARMENT_SIZES[index]} className={TABLE_BODY_CELL}>
+                    {value}
+                  </td>
+                ))}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      <p className="mt-3 text-xs text-ui-concrete">{GARMENT_MEASUREMENT_UNIT_NOTE}</p>
 
-      {/* 2 · How We Measure */}
-      <h3 className={`${HEADING_CLASSES} mt-8 mb-3`}>How We Measure</h3>
-      <ul className="list-disc space-y-2 pl-5">
-        {HOW_WE_MEASURE.map((item) => (
-          <li key={item.term}>
-            <strong className="font-bold text-primary-cream">{item.term}:</strong> {item.description}
-          </li>
-        ))}
-      </ul>
-
-      {/* 3 · Fit Notes */}
-      <h3 className={`${HEADING_CLASSES} mt-8 mb-3`}>Fit Notes</h3>
-      <ul className="list-disc space-y-2 pl-5">
-        {FIT_NOTES.map((note) => (
-          <li key={note.lead}>
-            <strong className="font-bold text-primary-cream">{note.lead}</strong> {note.body}
-          </li>
-        ))}
-      </ul>
-
-      {/* 4 · How to measure → garment-spec modal */}
+      {/* How To Measure → body-measurements + fit-notes modal */}
       <button
         type="button"
         onClick={() => setModalOpen(true)}
         className="mt-6 cursor-pointer text-xs font-bold uppercase tracking-widest text-primary-cream underline underline-offset-4 transition-colors hover:text-accent-energy active:text-accent-energy"
       >
-        How to measure
+        How To Measure
       </button>
 
       {modalOpen ? (
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="How to measure — garment measurements"
+          aria-label="How To Measure"
           className="fixed inset-0 z-[80] flex items-center justify-center p-4"
         >
           {/* Backdrop — a real button: keyboard-reachable, closes on click. */}
@@ -139,9 +138,9 @@ export function SizeGuide() {
             className="absolute inset-0 cursor-pointer bg-apeiron-black/70 backdrop-blur-sm"
           />
           <div className="relative max-h-[85vh] w-full max-w-2xl overflow-y-auto border border-ui-concrete/20 bg-primary-obsidian p-6 md:p-10">
-            <div className="mb-2 flex items-start justify-between gap-6">
+            <div className="mb-6 flex items-start justify-between gap-6">
               <h3 className="text-sm font-bold uppercase tracking-widest text-primary-cream">
-                Find Your Size — Body Measurements
+                How To Measure
               </h3>
               <button
                 ref={closeButtonRef}
@@ -153,45 +152,58 @@ export function SizeGuide() {
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
-            <p className="mb-6 text-sm text-ui-concrete">
-              Choose by your body chest. This block builds in roughly 8–12&quot; of ease for the
-              intended relaxed drape.
-            </p>
 
-            {/* Garment grid — the wide table; scrolls horizontally on its own
-                when the viewport can't show all six columns at once. */}
+            {/* Body-chest table — its own horizontal-scroll wrapper */}
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[560px] border-collapse text-left">
+              <table className="w-full min-w-[420px] border-collapse text-left">
                 <thead>
                   <tr>
                     <th scope="col" className={TABLE_HEAD_CELL}>Size</th>
-                    {GARMENT_SIZES.map((size) => (
-                      <th key={size} scope="col" className={TABLE_HEAD_CELL}>
-                        {size}
-                      </th>
-                    ))}
+                    <th scope="col" className={TABLE_HEAD_CELL}>Body chest (in)</th>
+                    <th scope="col" className={TABLE_HEAD_CELL}>Body chest (cm)</th>
+                    <th scope="col" className={TABLE_HEAD_CELL}>US Alpha</th>
+                    <th scope="col" className={TABLE_HEAD_CELL}>EU equivalent</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {GARMENT_MEASUREMENT_ROWS.map((row) => (
-                    <tr key={row.label}>
+                  {BODY_MEASUREMENT_ROWS.map((row) => (
+                    <tr key={row.size}>
                       <th
                         scope="row"
-                        className="border-b border-ui-concrete/10 py-2.5 pr-6 text-[10px] font-bold uppercase tracking-[0.15em] text-ui-concrete"
+                        className="border-b border-ui-concrete/10 py-2.5 pr-4 text-sm font-bold text-primary-cream"
                       >
-                        {row.label}
+                        {row.size}
                       </th>
-                      {row.values.map((value, index) => (
-                        <td key={GARMENT_SIZES[index]} className={TABLE_BODY_CELL}>
-                          {value}
-                        </td>
-                      ))}
+                      <td className={TABLE_BODY_CELL}>{row.chestIn}</td>
+                      <td className={TABLE_BODY_CELL}>{row.chestCm}</td>
+                      <td className={TABLE_BODY_CELL}>{row.usAlpha}</td>
+                      <td className={TABLE_BODY_CELL}>{row.euEquivalent}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <p className="mt-3 text-xs text-ui-concrete">{GARMENT_MEASUREMENT_UNIT_NOTE}</p>
+
+            {/* How We Measure */}
+            <h3 className={`${HEADING_CLASSES} mt-8 mb-3`}>How We Measure</h3>
+            <ul className="list-disc space-y-2 pl-5 text-sm text-ui-concrete">
+              {HOW_WE_MEASURE.map((item) => (
+                <li key={item.term}>
+                  <strong className="font-bold text-primary-cream">{item.term}:</strong>{' '}
+                  {item.description}
+                </li>
+              ))}
+            </ul>
+
+            {/* Fit Notes */}
+            <h3 className={`${HEADING_CLASSES} mt-8 mb-3`}>Fit Notes</h3>
+            <ul className="list-disc space-y-2 pl-5 text-sm text-ui-concrete">
+              {FIT_NOTES.map((note) => (
+                <li key={note.lead}>
+                  <strong className="font-bold text-primary-cream">{note.lead}</strong> {note.body}
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       ) : null}
