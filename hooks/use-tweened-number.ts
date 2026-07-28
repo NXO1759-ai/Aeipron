@@ -7,9 +7,11 @@
 // together like one instrument). Re-targets cleanly mid-flight: a new target
 // tweens FROM the number on screen at that moment.
 //
-// Each frame snaps to the nearest `step` (default 1 — the original integer
-// behaviour). The size selector passes 0.5 because the house block grades in
-// half inches, so the readout counts …23 → 23½ → 24… instead of jumping.
+// Display discipline: mid-flight frames count in WHOLE units — the count
+// up/down reads 24 → 25 → 26 → 27, smooth and legible. Only the SETTLED
+// frame shows the exact target, so a half value (27½) ever appears only when
+// it is the actual measurement of the selected size — never as intermediate
+// flicker between sizes.
 //
 // `null` target renders null (the caller shows a placeholder) and appears /
 // disappears instantly — no tween. Under prefers-reduced-motion the value
@@ -27,7 +29,7 @@ function easeOutQuint(t: number): number {
   return 1 - Math.pow(1 - t, 5);
 }
 
-export function useTweenedNumber(target: number | null, duration = 300, step = 1): number | null {
+export function useTweenedNumber(target: number | null, duration = 300): number | null {
   const [display, setDisplay] = useState<number | null>(target);
   const displayRef = useRef<number | null>(target);
   const [lastTarget, setLastTarget] = useState<number | null>(target);
@@ -66,14 +68,17 @@ export function useTweenedNumber(target: number | null, duration = 300, step = 1
     const start = performance.now();
     const tick = (now: number) => {
       const t = Math.min(1, (now - start) / duration);
-      const value = Math.round((from + (target - from) * easeOutQuint(t)) / step) * step;
+      // Whole-unit counting mid-flight; the exact target (halves included)
+      // only ever appears on the settled frame.
+      const value =
+        t >= 1 ? target : Math.round(from + (target - from) * easeOutQuint(t));
       displayRef.current = value;
       setDisplay(value);
       if (t < 1) frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [target, duration, step]);
+  }, [target, duration]);
 
   return display;
 }

@@ -23,9 +23,11 @@
 // or sound anywhere (no Vibration API, no AudioContext) — the spec forbids
 // them.
 //
-// Readout: the "CHEST … · LENGTH …" numbers tween in HALF-INCH steps (the
-// house block grades in halves — 23 → 23½ → 24) and settle on the exact
-// size-guide values, formatted with the ½ glyph like the guide tables.
+// Readout: the "CHEST … · LENGTH …" numbers count in WHOLE units while
+// gliding between sizes (24 → 25 → 26 → 27) — smooth and legible. A half
+// value (27½) appears ONLY when it is the selected size's actual
+// measurement, never as intermediate flicker, and is formatted with the ½
+// glyph like the size guide tables.
 // ---------------------------------------------------------------------------
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -62,9 +64,6 @@ export type SizeSelectorProps = {
 
 /** Half the marker's rendered width (the border-trick triangle is 10px across). */
 const MARKER_HALF_WIDTH = 5;
-
-/** The house block grades in half inches, so the readout tweens in halves. */
-const MEASUREMENT_TWEEN_STEP = 0.5;
 
 // SSR-safe layout effect: useLayoutEffect warns when run on the server.
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
@@ -110,8 +109,8 @@ export function SizeSelector({
   // announces only the SETTLED value, never the intermediate tween frames.
   const activeMeasurement =
     measurements && selectedIndex >= 0 ? measurements[selectedIndex] : undefined;
-  const chestDisplay = useTweenedNumber(activeMeasurement?.chest ?? null, 300, MEASUREMENT_TWEEN_STEP);
-  const lengthDisplay = useTweenedNumber(activeMeasurement?.length ?? null, 300, MEASUREMENT_TWEEN_STEP);
+  const chestDisplay = useTweenedNumber(activeMeasurement?.chest ?? null);
+  const lengthDisplay = useTweenedNumber(activeMeasurement?.length ?? null);
   const unit = measurementUnit.toUpperCase();
 
   // Measure after every selection change (layout effect → no visible jump)…
@@ -222,7 +221,8 @@ export function SizeSelector({
           data, or the house size block when absent). Always rendered when
           data exists so the layout never shifts on first selection;
           placeholders sit in until a size is picked. Values format like the
-          size guide tables: whole inches plain, halves with the ½ glyph. */}
+          size guide tables: whole inches plain, halves with the ½ glyph —
+          and a half only ever shows once settled on its actual size. */}
       {measurements ? (
         <p className="mt-8 text-center font-mono text-xs uppercase tracking-[0.3em] text-ui-concrete">
           <span className="sr-only" aria-live="polite">
