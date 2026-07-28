@@ -6,12 +6,13 @@
 // client's corrected spec:
 //
 //   PRODUCT SIZING DROPDOWN shows the garment-spec block:
-//     · "Find Your Size — Body Measurements" heading + the 8–12" ease line
+//     · "Body Measurements" heading (title case, not uppercase) + the
+//       8–12" ease line
 //     · the garment grid (S–XXL: body length HPS, chest pit-to-pit, chest
 //       full circumference, sleeve length from shoulder)
 //     · "All measurements in inches."
 //
-//   "How To Measure" button (each word capitalized) opens a MODAL with:
+//   "How To Measure" button (title case, not uppercase) opens a MODAL with:
 //     · the body-chest table (SIZE → chest IN / CM / US alpha / EU equivalent)
 //     · How We Measure — the three measurement definitions
 //     · Fit Notes — the four fit recommendations
@@ -44,6 +45,9 @@ import {
 } from '@/lib/size-guide';
 
 const HEADING_CLASSES = 'text-xs font-bold uppercase tracking-widest text-primary-cream';
+/** Title-case headings ("Body Measurements", "How To Measure") — the client
+ * wants each word capitalized, NOT the all-caps house label style. */
+const TITLE_HEADING_CLASSES = 'text-xs font-bold tracking-widest text-primary-cream';
 const TABLE_HEAD_CELL =
   'border-b border-ui-concrete/20 py-2 pr-4 text-[10px] font-bold uppercase tracking-[0.2em] text-ui-concrete';
 const TABLE_BODY_CELL =
@@ -73,7 +77,7 @@ export function SizeGuide() {
   return (
     <div>
       {/* Product Sizing dropdown body — the garment-spec block */}
-      <h3 className={HEADING_CLASSES}>Find Your Size — Body Measurements</h3>
+      <h3 className={TITLE_HEADING_CLASSES}>Body Measurements</h3>
       <p className="mt-2 mb-6 text-sm text-ui-concrete">
         Choose by your body chest. This block builds in roughly 8–12&quot; of ease for the
         intended relaxed drape.
@@ -118,7 +122,7 @@ export function SizeGuide() {
       <button
         type="button"
         onClick={() => setModalOpen(true)}
-        className="mt-6 cursor-pointer text-xs font-bold uppercase tracking-widest text-primary-cream underline underline-offset-4 transition-colors hover:text-accent-energy active:text-accent-energy"
+        className="mt-6 cursor-pointer text-xs font-bold tracking-widest text-primary-cream underline underline-offset-4 transition-colors hover:text-accent-energy active:text-accent-energy"
       >
         How To Measure
       </button>
@@ -139,7 +143,7 @@ export function SizeGuide() {
           />
           <div className="relative max-h-[85vh] w-full max-w-2xl overflow-y-auto border border-ui-concrete/20 bg-primary-obsidian p-6 md:p-10">
             <div className="mb-6 flex items-start justify-between gap-6">
-              <h3 className="text-sm font-bold uppercase tracking-widest text-primary-cream">
+              <h3 className="text-sm font-bold tracking-widest text-primary-cream">
                 How To Measure
               </h3>
               <button

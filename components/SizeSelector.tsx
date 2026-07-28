@@ -22,6 +22,10 @@
 // prefers-reduced-motion the marker snaps instantly. NO haptics, vibration,
 // or sound anywhere (no Vibration API, no AudioContext) — the spec forbids
 // them.
+//
+// Readout: the "CHEST … · LENGTH …" numbers tween in HALF-INCH steps (the
+// house block grades in halves — 23 → 23½ → 24) and settle on the exact
+// size-guide values, formatted with the ½ glyph like the guide tables.
 // ---------------------------------------------------------------------------
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -31,6 +35,7 @@ import {
   lastEnabledIndex,
   nextEnabledIndex,
 } from '@/lib/size-selector';
+import { formatMeasurementValue } from '@/lib/size-measurements';
 import type { SizeMeasurement } from '@/lib/size-measurements';
 import { useTweenedNumber } from '@/hooks/use-tweened-number';
 
@@ -57,6 +62,9 @@ export type SizeSelectorProps = {
 
 /** Half the marker's rendered width (the border-trick triangle is 10px across). */
 const MARKER_HALF_WIDTH = 5;
+
+/** The house block grades in half inches, so the readout tweens in halves. */
+const MEASUREMENT_TWEEN_STEP = 0.5;
 
 // SSR-safe layout effect: useLayoutEffect warns when run on the server.
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
@@ -102,8 +110,8 @@ export function SizeSelector({
   // announces only the SETTLED value, never the intermediate tween frames.
   const activeMeasurement =
     measurements && selectedIndex >= 0 ? measurements[selectedIndex] : undefined;
-  const chestDisplay = useTweenedNumber(activeMeasurement?.chest ?? null);
-  const lengthDisplay = useTweenedNumber(activeMeasurement?.length ?? null);
+  const chestDisplay = useTweenedNumber(activeMeasurement?.chest ?? null, 300, MEASUREMENT_TWEEN_STEP);
+  const lengthDisplay = useTweenedNumber(activeMeasurement?.length ?? null, 300, MEASUREMENT_TWEEN_STEP);
   const unit = measurementUnit.toUpperCase();
 
   // Measure after every selection change (layout effect → no visible jump)…
@@ -211,8 +219,10 @@ export function SizeSelector({
       </div>
 
       {/* Garment measurements for the selected size (per-product metafield
-          data). Always rendered when data exists so the layout never shifts
-          on first selection; placeholders sit in until a size is picked. */}
+          data, or the house size block when absent). Always rendered when
+          data exists so the layout never shifts on first selection;
+          placeholders sit in until a size is picked. Values format like the
+          size guide tables: whole inches plain, halves with the ½ glyph. */}
       {measurements ? (
         <p className="mt-8 text-center font-mono text-xs uppercase tracking-[0.3em] text-ui-concrete">
           <span className="sr-only" aria-live="polite">
@@ -221,9 +231,17 @@ export function SizeSelector({
               : ''}
           </span>
           <span aria-hidden="true">
-            Chest <span className="tabular-nums">{chestDisplay ?? '—'}</span> {unit}
+            Chest{' '}
+            <span className="tabular-nums">
+              {chestDisplay != null ? formatMeasurementValue(chestDisplay) : '—'}
+            </span>{' '}
+            {unit}
             {'  ·  '}
-            Length <span className="tabular-nums">{lengthDisplay ?? '—'}</span> {unit}
+            Length{' '}
+            <span className="tabular-nums">
+              {lengthDisplay != null ? formatMeasurementValue(lengthDisplay) : '—'}
+            </span>{' '}
+            {unit}
           </span>
         </p>
       ) : null}

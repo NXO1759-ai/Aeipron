@@ -1,11 +1,15 @@
 'use client';
 
 // ---------------------------------------------------------------------------
-// useTweenedNumber — animates an integer from its current displayed value to
+// useTweenedNumber — animates a number from its current displayed value to
 // the next target with requestAnimationFrame + easeOutQuint (the same easing
 // as the size selector's sliding marker, so the numbers and the marker glide
 // together like one instrument). Re-targets cleanly mid-flight: a new target
 // tweens FROM the number on screen at that moment.
+//
+// Each frame snaps to the nearest `step` (default 1 — the original integer
+// behaviour). The size selector passes 0.5 because the house block grades in
+// half inches, so the readout counts …23 → 23½ → 24… instead of jumping.
 //
 // `null` target renders null (the caller shows a placeholder) and appears /
 // disappears instantly — no tween. Under prefers-reduced-motion the value
@@ -23,7 +27,7 @@ function easeOutQuint(t: number): number {
   return 1 - Math.pow(1 - t, 5);
 }
 
-export function useTweenedNumber(target: number | null, duration = 300): number | null {
+export function useTweenedNumber(target: number | null, duration = 300, step = 1): number | null {
   const [display, setDisplay] = useState<number | null>(target);
   const displayRef = useRef<number | null>(target);
   const [lastTarget, setLastTarget] = useState<number | null>(target);
@@ -62,14 +66,14 @@ export function useTweenedNumber(target: number | null, duration = 300): number 
     const start = performance.now();
     const tick = (now: number) => {
       const t = Math.min(1, (now - start) / duration);
-      const value = Math.round(from + (target - from) * easeOutQuint(t));
+      const value = Math.round((from + (target - from) * easeOutQuint(t)) / step) * step;
       displayRef.current = value;
       setDisplay(value);
       if (t < 1) frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [target, duration]);
+  }, [target, duration, step]);
 
   return display;
 }
