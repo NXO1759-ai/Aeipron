@@ -8,6 +8,12 @@
 //   · Dialog chrome mirrors the PDP Reviews pop-up (ReviewsSection): bottom
 //     sheet on mobile, centered panel from `sm` up, Esc closes, backdrop
 //     click closes, page scroll locks while open, close button autofocused.
+//   · The dialog renders through createPortal into document.body — REQUIRED,
+//     not cosmetic: the footer root carries .cv-auto (content-visibility:
+//     auto), whose paint containment makes the footer the containing block
+//     AND clip boundary for fixed-position descendants. Rendered in place,
+//     the "fixed inset-0" overlay is trapped inside the footer box and the
+//     top of the panel is clipped off-screen.
 //   · Policy text (~40 kB) is NOT in the initial bundle: the content module
 //     (lib/legal-content) loads via dynamic import() the first time a dialog
 //     opens — preloaded on pointer-enter/focus so the click feels instant.
@@ -19,6 +25,7 @@
 // ---------------------------------------------------------------------------
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useDialogExit } from '@/hooks/use-dialog-exit';
 import {
   parseLegalHtml,
@@ -176,7 +183,12 @@ function LegalDialog({
     scrollRef.current?.scrollTo({ top: 0 });
   }, [title]);
 
-  return (
+  // Portal to document.body is required: the footer root carries .cv-auto
+  // (content-visibility: auto), and paint containment would otherwise make
+  // the footer the containing block — and clip boundary — for this fixed
+  // overlay, cutting off the top of the panel. The dialog only renders after
+  // a client-side click, so document is always defined here.
+  return createPortal(
     <div
       className={`fixed inset-0 z-50 flex items-end justify-center bg-apeiron-black/85 p-4 sm:items-center ${
         closing ? 'dialog-backdrop-out' : 'dialog-backdrop-in'
@@ -218,7 +230,8 @@ function LegalDialog({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
