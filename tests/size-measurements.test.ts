@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_SIZE_MEASUREMENTS,
+  HOUSE_MEASUREMENT_TABLE,
+  formatMeasurementValue,
   isSizeGroup,
   measurementForSize,
   measurementsForSizes,
@@ -13,9 +15,10 @@ import {
 // readout under the size selector. The contract under test: the metafield
 // JSON parses tolerantly (anything incomplete/invalid → undefined, never a
 // broken PDP), grading resolves every size from the anchor by the per-step
-// increments — up adds, down subtracts — and the readout ALWAYS has a config
-// to render with: the product's own metafield when present, otherwise the
-// house default (23 IN / 46 IN at the middle size, ±5 per step).
+// increments — up adds, down subtracts, rounded to the nearest half unit —
+// and the readout ALWAYS has a config to render with: the product's own
+// metafield when present, otherwise the house size block (pit-to-pit chest /
+// HPS body length, matching the size guide's garment grid exactly).
 // ---------------------------------------------------------------------------
 
 const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
@@ -95,12 +98,18 @@ describe('measurementForSize / measurementsForSizes', () => {
     expect(measurementForSize(config, ['S', 'M'], 'S')).toBeUndefined(); // anchor L absent
   });
 
-  it('rounds fractional gradings to whole units', () => {
+  it('rounds fractional gradings to the nearest half unit', () => {
     const fractional = parseSizeMeasurements(
       '{"anchor": "M", "chest": 20.4, "length": 46.5, "chestStep": 2.5, "lengthStep": 1.5}',
     )!;
     expect(measurementForSize(fractional, ['S', 'M', 'L'], 'L')).toEqual({ chest: 23, length: 48 });
     expect(measurementForSize(fractional, ['S', 'M', 'L'], 'S')).toEqual({ chest: 18, length: 45 });
+    // Half-inch grading (the house block's shape) keeps its halves.
+    const halves = parseSizeMeasurements(
+      '{"anchor": "M", "chest": 24, "length": 27.5, "chestStep": 1.5, "lengthStep": 1}',
+    )!;
+    expect(measurementForSize(halves, ['S', 'M', 'L'], 'L')).toEqual({ chest: 25.5, length: 28.5 });
+    expect(measurementForSize(halves, ['S', 'M', 'L'], 'S')).toEqual({ chest: 22.5, length: 26.5 });
   });
 
   it('maps every size, aligned with the input list', () => {
@@ -112,7 +121,7 @@ describe('measurementForSize / measurementsForSizes', () => {
   });
 });
 
-describe('resolveSizeMeasurements (metafield or house default)', () => {
+describe('resolveSizeMeasurements (metafield or house block)', () => {
   it('passes a product metafield config through untouched', () => {
     const own = parseSizeMeasurements(
       '{"anchor": "L", "chest": 61, "length": 72, "unit": "cm", "chestStep": 2, "lengthStep": 2}',
@@ -120,29 +129,67 @@ describe('resolveSizeMeasurements (metafield or house default)', () => {
     expect(resolveSizeMeasurements(own, SIZES)).toBe(own);
   });
 
-  it('falls back to the house default anchored on M', () => {
+  it('falls back to the house block anchored on M', () => {
     const resolved = resolveSizeMeasurements(undefined, SIZES)!;
-    expect(resolved).toEqual({ ...DEFAULT_SIZE_MEASUREMENTS, anchorSize: 'M' });
-    // 23 IN / 46 IN at M — "the medium being the middle point" — ±5 per step.
+    expect(resolved).toEqual({
+      ...DEFAULT_SIZE_MEASUREMENTS,
+      anchorSize: 'M',
+      table: HOUSE_MEASUREMENT_TABLE,
+    });
+    // Table-covered sizes use the exact guide values (the block's S→M chest
+    // step is +1, not the linear +1.5); sizes outside the table (XS, …)
+    // extend linearly from the anchor: 24 − 2×1.5 chest, 27.5 − 2×1 length.
     expect(measurementsForSizes(resolved, SIZES)).toEqual([
-      { chest: 13, length: 36 }, // XS
-      { chest: 18, length: 41 }, // S
-      { chest: 23, length: 46 }, // M
-      { chest: 28, length: 51 }, // L
-      { chest: 33, length: 56 }, // XL
-      { chest: 38, length: 61 }, // XXL
+      { chest: 21, length: 25.5 }, // XS — linear, not in the table
+      { chest: 23, length: 26.5 }, // S — table
+      { chest: 24, length: 27.5 }, // M — table
+      { chest: 25.5, length: 28.5 }, // L — table
+      { chest: 27, length: 29.5 }, // XL — table
+      { chest: 28.5, length: 30.5 }, // XXL — table
+    ]);
+  });
+
+  it('matches the size guide garment grid at every table size', () => {
+    const resolved = resolveSizeMeasurements(undefined, ['S', 'M', 'L', 'XL', 'XXL'])!;
+    // Same numbers as lib/size-guide's GARMENT_MEASUREMENT_ROWS:
+    // chest (pit to pit) 23 / 24 / 25½ / 27 / 28½,
+    // body length (HPS)  26½ / 27½ / 28½ / 29½ / 30½.
+    expect(measurementsForSizes(resolved, ['S', 'M', 'L', 'XL', 'XXL'])).toEqual([
+      { chest: 23, length: 26.5 },
+      { chest: 24, length: 27.5 },
+      { chest: 25.5, length: 28.5 },
+      { chest: 27, length: 29.5 },
+      { chest: 28.5, length: 30.5 },
     ]);
   });
 
   it('re-centres the fallback anchor on the middle size when there is no M', () => {
     const resolved = resolveSizeMeasurements(undefined, ['S', 'L', 'XL'])!;
     expect(resolved.anchorSize).toBe('L');
-    expect(measurementForSize(resolved, ['S', 'L', 'XL'], 'L')).toEqual({ chest: 23, length: 46 });
-    expect(measurementForSize(resolved, ['S', 'L', 'XL'], 'S')).toEqual({ chest: 18, length: 41 });
+    // Table values still win — the anchor only drives sizes the table misses.
+    expect(measurementForSize(resolved, ['S', 'L', 'XL'], 'L')).toEqual({ chest: 25.5, length: 28.5 });
+    expect(measurementForSize(resolved, ['S', 'L', 'XL'], 'S')).toEqual({ chest: 23, length: 26.5 });
+  });
+
+  it('matches table sizes case-insensitively', () => {
+    const resolved = resolveSizeMeasurements(undefined, ['s', 'm', 'l'])!;
+    expect(measurementForSize(resolved, ['s', 'm', 'l'], 'm')).toEqual({ chest: 24, length: 27.5 });
   });
 
   it('returns undefined only when there are no sizes at all', () => {
     expect(resolveSizeMeasurements(undefined, [])).toBeUndefined();
+  });
+});
+
+describe('formatMeasurementValue', () => {
+  it('prints whole inches plain and halves with the ½ glyph, like the guide', () => {
+    expect(formatMeasurementValue(24)).toBe('24');
+    expect(formatMeasurementValue(27.5)).toBe('27½');
+    expect(formatMeasurementValue(0.5)).toBe('0½');
+  });
+
+  it('prints any other fraction as-is', () => {
+    expect(formatMeasurementValue(23.25)).toBe('23.25');
   });
 });
 

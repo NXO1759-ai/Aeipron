@@ -12,6 +12,7 @@ import { SizeSelector } from '@/components/SizeSelector';
 import { ColorSwatchGroup, isColorGroup } from '@/components/product/ColorSwatch';
 import { DisclosureGroup, SmoothDisclosure } from '@/components/product/SmoothDisclosure';
 import { StickyBuyBar } from '@/components/product/StickyBuyBar';
+import { SizeGuide } from '@/components/product/SizeGuide';
 import { ReviewsSection } from '@/components/product/ReviewsSection';
 import type { ProductReviewData } from '@/lib/judge-me';
 import type { Product, ProductOption } from '@/lib/types';
@@ -342,7 +343,7 @@ export function ProductExperience({ product, reviewData }: { product: Product; r
 
             {/* Additional Info — animated disclosure rows (SmoothDisclosure:
                 compositor-only grid-row transition, like the cart drawer). The
-                three rich-text sections are driven by Shopify `rich_text`
+                two rich-text sections are driven by Shopify `rich_text`
                 metafields and always render so the structure is stable across
                 products; when a metafield has no value yet (null/undefined —
                 the store hasn't filled it in, or its definition isn't exposed
@@ -350,9 +351,14 @@ export function ProductExperience({ product, reviewData }: { product: Product; r
                 of disappearing. Shipping & Returns was removed per client
                 direction. The metafield value is a `rich_text` JSON string
                 rendered by <RichText> (NOT HTML — see components/RichText).
-                The fourth row, Reviews, pairs the fit scale (custom.review
-                json metafield → product.fit) with the Judge.me review data
-                fetched server-side and passed in as props. */}
+                Product Sizing is NOT metafield-driven: it renders the
+                structured house size block (components/product/SizeGuide on
+                lib/size-guide data) — the garment-spec grid ("Find Your Size —
+                Body Measurements") plus a "How To Measure" link that opens
+                the modal with the body-chest table, How We Measure and Fit
+                Notes. The last row, Reviews, pairs the fit scale
+                (custom.review json metafield → product.fit) with the Judge.me
+                review data fetched server-side and passed in as props. */}
             <div className="mt-16 space-y-6 border-t border-ui-concrete/20 pt-8">
               {/* DisclosureGroup: single-open accordion — opening one row
                   smoothly retracts the previous one. */}
@@ -360,7 +366,6 @@ export function ProductExperience({ product, reviewData }: { product: Product; r
                 {[
                   { title: 'Details & Fabrication', value: product.detailsFabrication },
                   { title: 'Product Care', value: product.productCare },
-                  { title: 'Product Sizing', value: product.productSizing },
                 ].map((section) => (
                   <SmoothDisclosure key={section.title} summary={section.title}>
                     {section.value ? (
@@ -372,6 +377,9 @@ export function ProductExperience({ product, reviewData }: { product: Product; r
                     )}
                   </SmoothDisclosure>
                 ))}
+                <SmoothDisclosure summary="Product Sizing">
+                  <SizeGuide />
+                </SmoothDisclosure>
                 <SmoothDisclosure summary="Reviews">
                   <ReviewsSection fit={product.fit ?? 0} data={reviewData} />
                 </SmoothDisclosure>

@@ -22,6 +22,12 @@
 // prefers-reduced-motion the marker snaps instantly. NO haptics, vibration,
 // or sound anywhere (no Vibration API, no AudioContext) — the spec forbids
 // them.
+//
+// Readout: the "CHEST … · LENGTH …" numbers count in WHOLE units while
+// gliding between sizes (24 → 25 → 26 → 27) — smooth and legible. A half
+// value (27½) appears ONLY when it is the selected size's actual
+// measurement, never as intermediate flicker, and is formatted with the ½
+// glyph like the size guide tables.
 // ---------------------------------------------------------------------------
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -31,6 +37,7 @@ import {
   lastEnabledIndex,
   nextEnabledIndex,
 } from '@/lib/size-selector';
+import { formatMeasurementValue } from '@/lib/size-measurements';
 import type { SizeMeasurement } from '@/lib/size-measurements';
 import { useTweenedNumber } from '@/hooks/use-tweened-number';
 
@@ -211,8 +218,11 @@ export function SizeSelector({
       </div>
 
       {/* Garment measurements for the selected size (per-product metafield
-          data). Always rendered when data exists so the layout never shifts
-          on first selection; placeholders sit in until a size is picked. */}
+          data, or the house size block when absent). Always rendered when
+          data exists so the layout never shifts on first selection;
+          placeholders sit in until a size is picked. Values format like the
+          size guide tables: whole inches plain, halves with the ½ glyph —
+          and a half only ever shows once settled on its actual size. */}
       {measurements ? (
         <p className="mt-8 text-center font-mono text-xs uppercase tracking-[0.3em] text-ui-concrete">
           <span className="sr-only" aria-live="polite">
@@ -221,9 +231,17 @@ export function SizeSelector({
               : ''}
           </span>
           <span aria-hidden="true">
-            Chest <span className="tabular-nums">{chestDisplay ?? '—'}</span> {unit}
+            Chest{' '}
+            <span className="tabular-nums">
+              {chestDisplay != null ? formatMeasurementValue(chestDisplay) : '—'}
+            </span>{' '}
+            {unit}
             {'  ·  '}
-            Length <span className="tabular-nums">{lengthDisplay ?? '—'}</span> {unit}
+            Length{' '}
+            <span className="tabular-nums">
+              {lengthDisplay != null ? formatMeasurementValue(lengthDisplay) : '—'}
+            </span>{' '}
+            {unit}
           </span>
         </p>
       ) : null}
