@@ -14,9 +14,12 @@
 //     AND clip boundary for fixed-position descendants. Rendered in place,
 //     the "fixed inset-0" overlay is trapped inside the footer box and the
 //     top of the panel is clipped off-screen.
-//   · Policy text (~40 kB) is NOT in the initial bundle: the content module
-//     (lib/legal-content) loads via dynamic import() the first time a dialog
-//     opens — preloaded on pointer-enter/focus so the click feels instant.
+//   · Policy text is NOT in the initial bundle: all three documents load in
+//     one fetch from /api/legal the first time a dialog opens — preloaded on
+//     pointer-enter/focus so the click feels instant. /api/legal reads the
+//     policies LIVE from Shopify's Storefront API (ISR-cached hourly) with
+//     the static snapshot in lib/legal-content as fallback, so edits in
+//     Shopify admin reach the dialogs without a code change.
 //   · HTML policies render through parseLegalHtml (whitelist parser) — safe
 //     React nodes, never dangerouslySetInnerHTML.
 //   · The Terms' four "[LINK]" placeholders render as link-styled buttons
@@ -242,25 +245,37 @@ function LegalDialog({
 export function FooterLegal() {
   const [openId, setOpenId] = useState<LegalDocumentId | null>(null);
   const [blocks, setBlocks] = useState<Partial<Record<LegalDocumentId, LegalBlock[]>>>({});
-  const loadedRef = useRef<Partial<Record<LegalDocumentId, true>>>({});
+  const loadedRef = useRef(false);
 
-  // Loads + parses a policy once. Called on click AND on hover/focus
-  // (preload), so first-open feels instant while the text stays out of the
-  // initial bundle.
-  const loadDocument = useCallback(async (id: LegalDocumentId) => {
-    if (loadedRef.current[id]) return;
-    loadedRef.current[id] = true;
-    const mod = await import('@/lib/legal-content');
-    const parsed = parseDocument(mod.LEGAL_DOCUMENTS[id]);
-    setBlocks((prev) => ({ ...prev, [id]: parsed }));
+  // Loads + parses all three policies in one round trip. Called on click AND
+  // on hover/focus (preload), so first-open feels instant while the text
+  // stays out of the initial bundle. On failure the flag resets so the next
+  // click/hover retries (the dialog keeps its "Loading…" state meanwhile).
+  const loadDocuments = useCallback(async () => {
+    if (loadedRef.current) return;
+    loadedRef.current = true;
+    try {
+      const res = await fetch('/api/legal');
+      if (!res.ok) throw new Error(`legal fetch failed: ${res.status}`);
+      const json = (await res.json()) as {
+        documents: Record<LegalDocumentId, LegalDocument>;
+      };
+      const parsed: Partial<Record<LegalDocumentId, LegalBlock[]>> = {};
+      for (const id of Object.keys(json.documents) as LegalDocumentId[]) {
+        parsed[id] = parseDocument(json.documents[id]);
+      }
+      setBlocks(parsed);
+    } catch {
+      loadedRef.current = false;
+    }
   }, []);
 
   const openDocument = useCallback(
     (id: LegalDocumentId) => {
       setOpenId(id);
-      void loadDocument(id);
+      void loadDocuments();
     },
-    [loadDocument],
+    [loadDocuments],
   );
 
   const openLink = openId ? LEGAL_LINKS.find((link) => link.id === openId) : undefined;
@@ -274,8 +289,8 @@ export function FooterLegal() {
             type="button"
             aria-haspopup="dialog"
             onClick={() => openDocument(link.id)}
-            onPointerEnter={() => void loadDocument(link.id)}
-            onFocus={() => void loadDocument(link.id)}
+            onPointerEnter={() => void loadDocuments()}
+            onFocus={() => void loadDocuments()}
             className="cursor-pointer text-ui-concrete uppercase tracking-widest text-[10px] font-bold hover:text-primary-cream transition-colors"
           >
             {link.title}
