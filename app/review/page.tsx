@@ -23,9 +23,9 @@ export const metadata: Metadata = {
 export default async function ReviewPage({
   searchParams,
 }: {
-  // Next 15 passes a Promise; awaiting a plain object is a no-op, so this
-  // type keeps the page correct on either convention.
-  searchParams: Promise<{ product?: string }> | { product?: string };
+  // Next 15 always passes searchParams as a Promise (and its generated route
+  // types REQUIRE the Promise form — a plain-object union fails the build).
+  searchParams: Promise<{ product?: string }>;
 }) {
   const sp = await searchParams;
   const preselect = typeof sp.product === 'string' ? sp.product : undefined;
