@@ -2,26 +2,11 @@ import type {NextConfig} from 'next';
 
 const isDev = process.env.NODE_ENV === 'development';
 
-// Content-Security-Policy, single source for both the enforced-Report-Only
-// header below and future tightening. Ships in REPORT-ONLY mode first: it
-// surfaces violations in the console/monitoring without breaking anything —
-// flip to `Content-Security-Policy` once a deploy cycle shows no violations.
-const CONTENT_SECURITY_POLICY = [
-  "default-src 'self'",
-  // next/image data: placeholders + Shopify CDN product imagery.
-  "img-src 'self' https://cdn.shopify.com data:",
-  // Next inline styles + motion inline transforms require 'unsafe-inline'.
-  "style-src 'self' 'unsafe-inline'",
-  // @vercel/analytics loads its script from the same origin on Vercel; the
-  // va.vercel-scripts.com entry covers self-hosted installs.
-  "script-src 'self' https://va.vercel-scripts.com",
-  "connect-src 'self' https://va.vercel-scripts.com https://vitals.vercel-insights.com",
-  "font-src 'self'",
-  "object-src 'none'",
-  "frame-ancestors 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-].join('; ');
+// The Content-Security-Policy lives in middleware.ts: it is NONCE-BASED
+// (per-request nonce threaded to Next's inline scripts via the request
+// header) and enforced in production, report-only in dev. Do NOT re-add a
+// static CSP here — a static `script-src 'self'` (no nonce) blocks Next's
+// inline hydration/bootstrap scripts and breaks the site when enforced.
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -43,7 +28,6 @@ const nextConfig: NextConfig = {
           {key: 'X-Frame-Options', value: 'DENY'},
           {key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin'},
           {key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()'},
-          {key: 'Content-Security-Policy-Report-Only', value: CONTENT_SECURITY_POLICY},
         ],
       },
     ];
