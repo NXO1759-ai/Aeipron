@@ -61,13 +61,33 @@ cart, and checkout is the Shopify Storefront API.
 
 ## Security
 
-- **HTTP security headers** set in `next.config.ts` (HSTS, `X-Frame-Options:
-  DENY`, `nosniff`, Referrer-Policy, Permissions-Policy, and a **report-only**
-  CSP — flip `Content-Security-Policy-Report-Only` to enforced after one clean
-  deploy cycle).
+- **HTTP security headers**: HSTS, `X-Frame-Options: DENY`, `nosniff`,
+  Referrer-Policy, and Permissions-Policy are set in `next.config.ts`; the
+  **Content-Security-Policy** is set in `middleware.ts`, **enforced in
+  production** (report-only in development so HMR is never blocked), and
+  split by render mode:
+  - **Dynamic routes** (cart, checkout, review, product/collection/
+    collaborator detail, `/api/*`) get a strict **nonce-based** `script-src`:
+    a fresh per-request nonce is forwarded via the `Content-Security-Policy`
+    request header, Next.js stamps it onto its inline hydration/bootstrap
+    scripts, and any inline script without the nonce is blocked.
+  - **Static/ISR routes** (cached HTML — home, shop, story, help, contact,
+    gate, catalog lists) get `script-src 'self' 'unsafe-inline' …`: a
+    per-request nonce can never match cached HTML, so enforcing one there
+    would break hydration for every visitor after the first. All other
+    directives (`object-src 'none'`, `frame-ancestors 'none'`,
+    `base-uri 'self'`, …) stay strict on every route.
+  When adding an inline `<script>` of your own on a dynamic route, thread
+  the request nonce into a `nonce` attribute — or the browser will refuse
+  to execute it.
 - **Rate limiting** is enforced at the edge (Cloudflare, in front of the
   Node server). Recommended WAF rules:
   - `POST /contact` (Server Action submissions): **10 requests/minute/IP**
+  - `POST /api/gate` (launch access-code checks): **5 requests/minute/IP** —
+    the route has no server-side throttle, so without an edge rule the access
+    code is brute-forceable.
+  - `POST /api/review` (review submissions): **5 requests/minute/IP** — the
+    route's only spam defense is a honeypot.
   - Server Action mutations on `/cart`, `/shop`, `/product/*`, `/checkout`:
     **60 requests/minute/IP**
   Server Actions are POST requests to the page URL with the `Next-Action`
@@ -83,14 +103,14 @@ for the annotated template.
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `SHOPIFY_STORE_DOMAIN` | Yes | e.g. `your-store.myshopify.com` |
-| `SHOPIFY_STOREFRONT_API_TOKEN` | Yes | Storefront API public token |
-| `SHOPIFY_ADMIN_API_TOKEN` | Contact only | Admin API token, `write_metaobjects` scope only |
+| `SHOPIFY_STOREFRONT_ACCESS_TOKEN` | Yes | Storefront API public token |
+| `SHOPIFY_ADMIN_API_ACCESS_TOKEN` | Contact only | Admin API token, `write_metaobjects` scope only |
 | `SHOPIFY_API_VERSION` | No | Defaults to `2026-01` |
 | `NAVIDIUM_API_URL` | Protection only | Navidium quote lambda URL |
 | `JUDGE_ME_API_TOKEN` | Reviews only | Judge.me private token |
 | `RESEND_API_KEY` | Contact (option A) | Resend delivery |
-| `SMTP_URL` | Contact (option B) | `smtps://user:pass@host:465` — vendored TLS-only client |
-| `CONTACT_INBOX` | Contact | Destination inbox |
+| `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS` | Contact (option B) | Vendored TLS-only client (`SMTP_PORT` defaults to 465) |
+| `CONTACT_EMAIL_TO` | Contact | Destination inbox |
 
 ## Development
 
