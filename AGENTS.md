@@ -86,6 +86,11 @@ redirect restricted to internal paths; non-leaking client-facing errors.
 
 ## Gotchas
 
+- **`output` is conditional** (`process.env.VERCEL ? undefined :
+  'standalone'`). Do NOT set it unconditionally either way: standalone is
+  required for the self-hosted Cloudflare deployment, but on Next.js 16.3
+  (Turbopack) a standalone build crashes Vercel's `onBuildComplete`
+  (`ENOENT .next/next-server.js.nft.json`, vercel/next.js#96646).
 - **ESLint is pinned to v9** (`^9.39.1`). Do not upgrade to ESLint 10:
   eslint-config-next 16.3 bundles eslint-plugin-react 7.37.5, which calls
   removed APIs and crashes under ESLint 10. Upgrade only when

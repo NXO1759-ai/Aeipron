@@ -52,7 +52,14 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  output: 'standalone',
+  // Standalone output is for the self-hosted Node server behind Cloudflare.
+  // It is DISABLED on Vercel: on Next 16.3 (Turbopack) a standalone build
+  // crashes Vercel's onBuildComplete step with
+  // `ENOENT .next/next-server.js.nft.json` (vercel/next.js#96646 — Turbopack
+  // skips emitting that trace file when Vercel's build adapter is active,
+  // but the standalone finalize step still requires it). Vercel doesn't use
+  // the standalone folder anyway — it deploys serverless functions.
+  output: process.env.VERCEL ? undefined : 'standalone',
 };
 
 export default nextConfig;

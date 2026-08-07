@@ -138,3 +138,9 @@ Standalone Node server (`output: 'standalone'`) behind Cloudflare. Run with
 `NODE_ENV=production` so the image optimizer (sharp) and the `__Host-` cart
 cookie are active. Set the env vars above; apply the Cloudflare WAF rate-limit
 rules before opening real traffic.
+
+Vercel preview deployments are unaffected by the standalone setting — it is
+automatically disabled when `VERCEL` is set (see `next.config.ts`): on
+Next.js 16.3 (Turbopack) a standalone build crashes Vercel's
+`onBuildComplete` step (`ENOENT .next/next-server.js.nft.json`,
+vercel/next.js#96646), and Vercel doesn't use the standalone folder anyway.
