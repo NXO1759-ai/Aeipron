@@ -3,7 +3,7 @@ import { GateForm } from './gate-form';
 
 // ---------------------------------------------------------------------------
 // /gate — the pre-launch access-code screen. Visitors land here when
-// middleware.ts finds no valid gate cookie (only while SITE_GATE_PASSWORD is
+// proxy.ts finds no valid gate cookie (only while SITE_GATE_PASSWORD is
 // set). The form posts to /api/gate; on success it returns the visitor to
 // the page they originally asked for. Noindex, always.
 // ---------------------------------------------------------------------------

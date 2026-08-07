@@ -1,5 +1,8 @@
 // ---------------------------------------------------------------------------
-// Middleware — two concerns, applied to every matched request:
+// Proxy — Next.js 16's renamed request-interception hook (formerly
+// "middleware"). Runs on the Node.js runtime; Web Crypto and `btoa` are
+// globals there (Node 20+), so the gate hashing and nonce generation below
+// work unchanged. Two concerns, applied to every matched request:
 //
 // 1. CONTENT SECURITY POLICY. Enforced in production, report-only in
 //    development (so HMR / React refresh are never broken locally).
@@ -94,7 +97,7 @@ function buildCsp(nonce: string | null): string {
   ].join('; ');
 }
 
-/** 128-bit random nonce, base64 — Web Crypto + btoa (Edge runtime, no Buffer). */
+/** 128-bit random nonce, base64 — Web Crypto + btoa (globals in the Node runtime). */
 function generateNonce(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
   let binary = '';
@@ -102,7 +105,7 @@ function generateNonce(): string {
   return btoa(binary);
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const dynamic = isDynamicRoute(pathname);
   const nonce = dynamic ? generateNonce() : null;

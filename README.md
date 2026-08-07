@@ -6,8 +6,8 @@ cart, and checkout is the Shopify Storefront API.
 
 ## Stack
 
-- **Next.js 15.5** — App Router, ISR (5-minute revalidation on catalog routes),
-  Server Actions, `output: 'standalone'`
+- **Next.js 16** — App Router, ISR (5-minute revalidation on catalog routes),
+  Server Actions, Turbopack (default bundler), `output: 'standalone'`
 - **React 19**, **Tailwind CSS 4**, **motion** (compositor-only animation),
   **zustand** (optimistic cart store), **zod** (input validation)
 - **Shopify Storefront API** (catalog, cart) + **Shopify Admin API**
@@ -63,7 +63,8 @@ cart, and checkout is the Shopify Storefront API.
 
 - **HTTP security headers**: HSTS, `X-Frame-Options: DENY`, `nosniff`,
   Referrer-Policy, and Permissions-Policy are set in `next.config.ts`; the
-  **Content-Security-Policy** is set in `middleware.ts`, **enforced in
+  **Content-Security-Policy** is set in `proxy.ts` (Next.js 16's renamed
+  request-interception hook, formerly `middleware.ts`), **enforced in
   production** (report-only in development so HMR is never blocked), and
   split by render mode:
   - **Dynamic routes** (cart, checkout, review, product/collection/
@@ -137,3 +138,9 @@ Standalone Node server (`output: 'standalone'`) behind Cloudflare. Run with
 `NODE_ENV=production` so the image optimizer (sharp) and the `__Host-` cart
 cookie are active. Set the env vars above; apply the Cloudflare WAF rate-limit
 rules before opening real traffic.
+
+Vercel preview deployments are unaffected by the standalone setting — it is
+automatically disabled when `VERCEL` is set (see `next.config.ts`): on
+Next.js 16.3 (Turbopack) a standalone build crashes Vercel's
+`onBuildComplete` step (`ENOENT .next/next-server.js.nft.json`,
+vercel/next.js#96646), and Vercel doesn't use the standalone folder anyway.
