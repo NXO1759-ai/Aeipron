@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // POST /api/gate — verifies the access code against SITE_GATE_PASSWORD and,
-// on a match, sets the httpOnly gate cookie that middleware.ts checks.
+// on a match, sets the httpOnly gate cookie that proxy.ts checks.
 //
 // Plain string comparison is intentional: this is a launch gate, not account
 // auth, and the request/response round trip already dwarfs any timing signal.

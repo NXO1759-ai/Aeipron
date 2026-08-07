@@ -2,17 +2,22 @@ import type {NextConfig} from 'next';
 
 const isDev = process.env.NODE_ENV === 'development';
 
-// The Content-Security-Policy lives in middleware.ts: it is NONCE-BASED
+// The Content-Security-Policy lives in proxy.ts: it is NONCE-BASED
 // (per-request nonce threaded to Next's inline scripts via the request
 // header) and enforced in production, report-only in dev. Do NOT re-add a
 // static CSP here — a static `script-src 'self'` (no nonce) blocks Next's
 // inline hydration/bootstrap scripts and breaks the site when enforced.
+//
+// Next.js 16 notes:
+//   - Turbopack is the default bundler for dev AND build, so there is no
+//     `webpack` key here — a webpack config makes `next build` fail. (The old
+//     DISABLE_HMR watch hack was sandbox-specific and is gone; Turbopack file
+//     watching doesn't need it.)
+//   - The `eslint` config key and `next lint` are removed — linting runs via
+//     the ESLint CLI (`npm run lint`), never during `next build`.
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  eslint: {
-    ignoreDuringBuilds: false,
-  },
   typescript: {
     ignoreBuildErrors: false,
   },
@@ -48,16 +53,6 @@ const nextConfig: NextConfig = {
     ],
   },
   output: 'standalone',
-  webpack: (config, {dev}) => {
-    // HMR is disabled in AI Studio via DISABLE_HMR env var.
-    // Do not modify — file watching is disabled to prevent flickering during agent edits.
-    if (dev && process.env.DISABLE_HMR === 'true') {
-      config.watchOptions = {
-        ignored: /.*/,
-      };
-    }
-    return config;
-  },
 };
 
 export default nextConfig;

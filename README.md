@@ -6,8 +6,8 @@ cart, and checkout is the Shopify Storefront API.
 
 ## Stack
 
-- **Next.js 15.5** — App Router, ISR (5-minute revalidation on catalog routes),
-  Server Actions, `output: 'standalone'`
+- **Next.js 16** — App Router, ISR (5-minute revalidation on catalog routes),
+  Server Actions, Turbopack (default bundler), `output: 'standalone'`
 - **React 19**, **Tailwind CSS 4**, **motion** (compositor-only animation),
   **zustand** (optimistic cart store), **zod** (input validation)
 - **Shopify Storefront API** (catalog, cart) + **Shopify Admin API**
@@ -63,7 +63,8 @@ cart, and checkout is the Shopify Storefront API.
 
 - **HTTP security headers**: HSTS, `X-Frame-Options: DENY`, `nosniff`,
   Referrer-Policy, and Permissions-Policy are set in `next.config.ts`; the
-  **Content-Security-Policy** is set in `middleware.ts`, **enforced in
+  **Content-Security-Policy** is set in `proxy.ts` (Next.js 16's renamed
+  request-interception hook, formerly `middleware.ts`), **enforced in
   production** (report-only in development so HMR is never blocked), and
   split by render mode:
   - **Dynamic routes** (cart, checkout, review, product/collection/
