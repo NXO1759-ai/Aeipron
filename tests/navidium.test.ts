@@ -219,4 +219,24 @@ describe('getShippingProtectionQuote — server-side cart pricing', () => {
 
     expect(mockFetch).not.toHaveBeenCalled();
   });
+
+  // The store's protection fee is a FLAT $4.95 (Navidium dashboard config).
+  // The lambda can keep answering with the old tiered price ($1.00) after a
+  // dashboard change, so the action pins the advertised price — the variant
+  // id still comes from Navidium, the price never does.
+  it('pins the quote price to the flat $4.95 fee regardless of the lambda price', async () => {
+    getCartMock.mockResolvedValue(cartWith([line({})]));
+    // Default lambda mock answers price '1.50' — the stale tier.
+    const quote = await getShippingProtectionQuote();
+    expect(quote).not.toBeNull();
+    expect(quote?.price).toBe(4.95);
+    expect(quote?.variantId).toBe('gid://shopify/ProductVariant/46569521702021');
+  });
+
+  it('honors NAVIDIUM_FIXED_FEE when the flat fee changes', async () => {
+    vi.stubEnv('NAVIDIUM_FIXED_FEE', '5.95');
+    getCartMock.mockResolvedValue(cartWith([line({})]));
+    const quote = await getShippingProtectionQuote();
+    expect(quote?.price).toBe(5.95);
+  });
 });
