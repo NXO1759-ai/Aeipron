@@ -53,3 +53,37 @@ export function protectionLineOf<T extends LineLike>(lines: T[]): T | null {
 export function protectionQuantityOf(lines: (LineLike & { quantity: number })[]): number {
   return lines.filter(isProtectionLine).reduce((acc, line) => acc + line.quantity, 0);
 }
+
+/**
+ * True only when the live quote points at a DIFFERENT variant than the active
+ * protection line — a genuine tier/product change that justifies a remove+add.
+ *
+ * A price mismatch ALONE never justifies a swap: the reconciled Shopify
+ * variant price is authoritative for the charge, and re-adding the same
+ * variant reconciles to the same server price — so a price-aware condition
+ * can only loop (remove → re-add → same mismatch → repeat). That loop is what
+ * made the drawer toggle switch on and off by itself when Navidium's widget
+ * config diverged from the variant's Shopify price.
+ */
+export function protectionSwapNeeded(
+  line: Pick<CartLine, 'merchandiseId'>,
+  quote: { variantId: string; price?: number },
+): boolean {
+  return line.merchandiseId !== quote.variantId;
+}
+
+/**
+ * One swap attempt per target variant per cart state. If Shopify reconciles
+ * the cart to something other than the quote's variant (platform desync),
+ * retrying the same target just re-runs the same remove+add — an infinite
+ * loop that flips the toggle on and off. The caller records the target before
+ * each attempt and clears the record when the merchandise state changes, so a
+ * genuinely new cart earns one fresh attempt.
+ */
+export function protectionSwapAttemptAllowed(
+  line: Pick<CartLine, 'merchandiseId'>,
+  quote: { variantId: string; price?: number },
+  lastSwapTarget: string | null,
+): boolean {
+  return protectionSwapNeeded(line, quote) && quote.variantId !== lastSwapTarget;
+}

@@ -10,8 +10,9 @@ import 'server-only';
 //          country_name, shop_url }
 //   → { statusCode: 200, data: { variant_id: "46569521709253", price: "0.75",
 //                                widget_display_status: false } }
-// The variant is TIERED by cart value (quantity is always 1), so the quote must
-// be re-requested whenever the merchandise lines change.
+// The variant and price reflect Navidium's dashboard configuration (flat fee,
+// or tiered by cart value; quantity is always 1), so the quote is re-requested
+// whenever the merchandise lines change.
 //
 // Env vars (see .env.example):
 //   NAVIDIUM_API_URL      — the lambda URL from the Navidium dashboard. Unset →

@@ -32,6 +32,19 @@ function numericIdFromGid(merchandiseId: string): string {
   return match ? match[1] : merchandiseId;
 }
 
+// The store charges a FLAT $4.95 protection fee (Navidium dashboard config).
+// Navidium's lambda can keep answering with the old tiered price ($1.00)
+// after a dashboard change, so the quote's price is pinned here: the
+// displayed amount always matches the flat fee the protection variant
+// charges. Set NAVIDIUM_FIXED_FEE if the fee ever changes.
+const DEFAULT_FIXED_FEE = 4.95;
+
+/** The flat protection fee — env override, else the store's $4.95. */
+function fixedFee(): number {
+  const parsed = Number(process.env.NAVIDIUM_FIXED_FEE);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_FIXED_FEE;
+}
+
 /**
  * Quote shipping protection for the caller's current cart. The merchandise
  * lines and their prices are read from the server-side Shopify cart (via the
@@ -61,7 +74,7 @@ export async function getShippingProtectionQuote(
   const totalPrice =
     Math.round(lines.reduce((acc, line) => acc + line.price * line.quantity, 0) * 100) / 100;
 
-  return getProtectionQuote({
+  const quote = await getProtectionQuote({
     totalPrice,
     items: lines.map((line) => ({
       productId: numericIdFromGid(line.merchandiseId),
@@ -70,4 +83,9 @@ export async function getShippingProtectionQuote(
     })),
     countryName: typeof input?.countryName === 'string' ? input.countryName : undefined,
   });
+  if (!quote) return null;
+  // Pin the fee: the variant still comes from Navidium's quote, but the
+  // advertised price is the store's flat fee — never the lambda's (possibly
+  // stale) tier price.
+  return { ...quote, price: fixedFee() };
 }
